@@ -27,76 +27,117 @@ export class Enemy {
   _build(scene, position) {
     this.group = new THREE.Group();
 
-    const bone = () => new THREE.MeshLambertMaterial({ color: 0xcccab8 });
-    const eye = new THREE.MeshBasicMaterial({ color: 0x44ff33 });
+    const orangeMat = new THREE.MeshLambertMaterial({ color: 0xee5500 });
+    const greenMat  = new THREE.MeshLambertMaterial({ color: 0x228800 });
+    const blackMat  = new THREE.MeshLambertMaterial({ color: 0x111111 });
+    const whiteMat  = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
 
-    const box = (w, h, d, mat) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat instanceof THREE.Material ? mat : bone());
+    const s = (geo, mat) => {
+      const m = new THREE.Mesh(geo, mat);
       m.castShadow = true;
       return m;
     };
 
-    // Torso
-    const torso = box(0.65, 0.9, 0.38);
-    torso.position.y = 1.25;
-    this.group.add(torso);
+    // ── Carrot body: wide at top, pointy at bottom ──
+    const body = s(new THREE.CylinderGeometry(0.42, 0.04, 1.32, 5), orangeMat);
+    body.position.y = 0.86;
+    this.group.add(body);
 
-    // Head (skull shape)
-    const head = box(0.58, 0.6, 0.58);
-    head.position.y = 2.05;
-    this.group.add(head);
+    // ── Green leafy top (several cones splayed out) ──
+    const leafData = [
+      [0,    0,    0,    0   ],   // center, straight up
+      [-0.1, 0,    0.08, 0.28],   // lean left-forward
+      [0.12, 0,   -0.06, -0.24],  // lean right-back
+      [-0.06,0,  -0.12,  0.22],   // lean left-back
+      [0.08, 0,    0.10, -0.18],  // lean right-forward
+    ];
+    leafData.forEach(([ox, , oz, rz], i) => {
+      const leaf = s(new THREE.ConeGeometry(0.09 - i * 0.008, 0.40 - i * 0.03, 5), greenMat);
+      leaf.position.set(ox, 1.66 + i * 0.04, oz);
+      leaf.rotation.z = rz;
+      this.group.add(leaf);
+    });
 
-    // Glowing eyes
-    const eyeGeo = new THREE.BoxGeometry(0.11, 0.11, 0.08);
-    const leftEye = new THREE.Mesh(eyeGeo, eye);
-    leftEye.position.set(-0.15, 2.08, 0.3);
-    this.group.add(leftEye);
-    const rightEye = new THREE.Mesh(eyeGeo, eye);
-    rightEye.position.set(0.15, 2.08, 0.3);
-    this.group.add(rightEye);
+    // ── Face features (front of body, z ≈ +0.30) ──
+    // Angry white eyes
+    [-0.13, 0.13].forEach((ex, i) => {
+      const eyeWhite = s(new THREE.BoxGeometry(0.15, 0.10, 0.05), whiteMat);
+      eyeWhite.position.set(ex, 1.16, 0.30);
+      this.group.add(eyeWhite);
 
-    // Legs
-    this._leftLeg = box(0.22, 0.78, 0.28);
-    this._leftLeg.position.set(-0.17, 0.39, 0);
-    this.group.add(this._leftLeg);
+      const pupil = s(new THREE.BoxGeometry(0.08, 0.07, 0.04), blackMat);
+      pupil.position.set(ex, 1.14, 0.33);
+      this.group.add(pupil);
 
-    this._rightLeg = box(0.22, 0.78, 0.28);
-    this._rightLeg.position.set(0.17, 0.39, 0);
-    this.group.add(this._rightLeg);
+      // Angry inward-tilted brow
+      const brow = s(new THREE.BoxGeometry(0.17, 0.045, 0.04), blackMat);
+      brow.position.set(ex, 1.25, 0.30);
+      brow.rotation.z = (i === 0 ? 1 : -1) * 0.45;
+      this.group.add(brow);
+    });
 
-    // Arms
+    // Frown: two short angled bars forming a ∪ shape
+    [-0.09, 0.09].forEach((fx, i) => {
+      const frown = s(new THREE.BoxGeometry(0.13, 0.045, 0.04), blackMat);
+      frown.position.set(fx, 0.94, 0.31);
+      frown.rotation.z = (i === 0 ? 1 : -1) * 0.55;
+      this.group.add(frown);
+    });
+
+    // ── Stick arms (thin cylinders, pivot at shoulder) ──
     this._leftArmPivot = new THREE.Group();
-    this._leftArmPivot.position.set(-0.46, 1.65, 0);
-    const leftArm = box(0.2, 0.75, 0.24);
-    leftArm.position.y = -0.37;
-    this._leftArmPivot.add(leftArm);
+    this._leftArmPivot.position.set(-0.30, 1.08, 0);
+    const leftArmCyl = s(new THREE.CylinderGeometry(0.04, 0.04, 0.58, 5), blackMat);
+    leftArmCyl.rotation.z = Math.PI / 2;
+    leftArmCyl.position.x = -0.29;
+    this._leftArmPivot.add(leftArmCyl);
     this.group.add(this._leftArmPivot);
 
     this._rightArmPivot = new THREE.Group();
-    this._rightArmPivot.position.set(0.46, 1.65, 0);
-    const rightArm = box(0.2, 0.75, 0.24);
-    rightArm.position.y = -0.37;
-    this._rightArmPivot.add(rightArm);
+    this._rightArmPivot.position.set(0.30, 1.08, 0);
+    const rightArmCyl = s(new THREE.CylinderGeometry(0.04, 0.04, 0.58, 5), blackMat);
+    rightArmCyl.rotation.z = Math.PI / 2;
+    rightArmCyl.position.x = 0.29;
+    this._rightArmPivot.add(rightArmCyl);
     this.group.add(this._rightArmPivot);
 
-    // Weapon: bone club
-    const clubMat = new THREE.MeshLambertMaterial({ color: 0xb8a888 });
-    const clubHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.7, 6), clubMat);
-    clubHandle.position.set(0, -0.78, 0.3);
-    clubHandle.rotation.x = Math.PI * 0.2;
-    this._rightArmPivot.add(clubHandle);
+    // Sword on right arm
+    const bladeMat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+    const guardMat = new THREE.MeshLambertMaterial({ color: 0x885522 });
+    const blade = s(new THREE.BoxGeometry(0.08, 0.80, 0.06), bladeMat);
+    blade.position.set(0.68, -0.1, 0.05);
+    blade.rotation.z = -0.5;
+    this._rightArmPivot.add(blade);
+    const guard = s(new THREE.BoxGeometry(0.28, 0.07, 0.08), guardMat);
+    guard.position.set(0.52, 0.22, 0.04);
+    guard.rotation.z = -0.5;
+    this._rightArmPivot.add(guard);
 
-    const clubHead = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), clubMat);
-    clubHead.position.set(0, -1.15, 0.5);
-    this._rightArmPivot.add(clubHead);
+    // ── Stick legs with tiny forked feet ──
+    const makeLeg = (xOff) => {
+      const g = new THREE.Group();
+      g.position.set(xOff, 0.26, 0);
+      // Main stick
+      const stick = s(new THREE.CylinderGeometry(0.038, 0.038, 0.52, 5), blackMat);
+      stick.position.y = -0.26;
+      g.add(stick);
+      // Two small toe branches
+      [-0.09, 0.09].forEach(tx => {
+        const toe = s(new THREE.CylinderGeometry(0.028, 0.02, 0.18, 4), blackMat);
+        toe.rotation.z = tx > 0 ? 0.7 : -0.7;
+        toe.position.set(tx * 0.7, -0.55, 0.05);
+        g.add(toe);
+      });
+      return g;
+    };
 
-    // Store all material instances for flash effect
-    this._materials = [];
-    this.group.traverse(child => {
-      if (child.isMesh && child.material && child.material !== eye) {
-        this._materials.push({ mat: child.material, origColor: child.material.color.clone() });
-      }
-    });
+    this._leftLeg  = makeLeg(-0.11);
+    this._rightLeg = makeLeg(0.11);
+    this.group.add(this._leftLeg);
+    this.group.add(this._rightLeg);
+
+    // Flash-on-hit: only the orange body
+    this._materials = [{ mat: orangeMat, origColor: orangeMat.color.clone() }];
 
     this.group.position.copy(position);
     scene.add(this.group);

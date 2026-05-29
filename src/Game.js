@@ -217,7 +217,7 @@ export class Game {
   }
 
   _spawnParticles(position) {
-    const colors = [0xccccaa, 0xddddcc, 0xaaaaaa, 0x888866];
+    const colors = [0xee5500, 0xff7722, 0xcc4400, 0x228800];
     for (let i = 0; i < 8; i++) {
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(0.18, 0.18, 0.18),

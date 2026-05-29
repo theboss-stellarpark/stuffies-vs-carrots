@@ -7,6 +7,9 @@ export class Player {
     this.speed = 7;
     this.defense = 0;
     this.facingAngle = 0;
+    this._armorBody = null;
+    this._armorPadL = null;
+    this._armorPadR = null;
     this.attackAnim = 0;
     this.invincible = false;
     this.dead = false;
@@ -46,25 +49,25 @@ export class Player {
     head.position.y = 1.84;
     this.group.add(head);
 
-    // ── Ears: large forward-facing flat discs, like elephant ears ──
-    // Z scale is very small so you see the full round face from the front.
+    // ── Ears: triangular, flat base flush against head ──
+    // x=0.52 puts the flat edge of the base triangle just inside the head surface.
+    // rotation.y = side*PI/3 rotates the 3-segment base so one flat edge faces inward.
+    // scale.z=0.30 gives enough depth to be visible from the isometric camera.
     const innerEarMat = new THREE.MeshLambertMaterial({ color: 0xd0a0f0 });
 
     [-1, 1].forEach(side => {
-      const x = side * 0.68;
+      const x = side * 0.52;
 
-      // Outer ear — triangular cone, flat side facing the head
-      const outer = s(new THREE.ConeGeometry(0.36, 0.62, 3), this._armorMat);
-      outer.scale.set(1.0, 1.0, 0.12);
+      const outer = s(new THREE.ConeGeometry(0.30, 0.52, 3), this._armorMat);
+      outer.scale.set(1.0, 1.0, 0.30);
       outer.rotation.y = side * Math.PI / 3;
-      outer.position.set(x, 2.19, 0.0);
+      outer.position.set(x, 2.04, 0.0);
       this.group.add(outer);
 
-      // Inner ear — smaller triangle, lighter colour, pushed slightly forward
-      const inner = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.40, 3), innerEarMat);
-      inner.scale.set(1.0, 1.0, 0.10);
+      const inner = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.33, 3), innerEarMat);
+      inner.scale.set(1.0, 1.0, 0.26);
       inner.rotation.y = side * Math.PI / 3;
-      inner.position.set(x, 2.24, 0.03);
+      inner.position.set(x, 2.09, 0.04);
       this.group.add(inner);
     });
 
@@ -193,10 +196,153 @@ export class Player {
       this._weaponGroup = this._buildWeaponMesh(item);
       this._rightArmPivot.add(this._weaponGroup);
     } else if (item.type === 'armor') {
+      // Remove previous armor pieces
+      if (this._armorBody)  this.group.remove(this._armorBody);
+      if (this._armorPadL)  this._leftArmPivot.remove(this._armorPadL);
+      if (this._armorPadR)  this._rightArmPivot.remove(this._armorPadR);
+      this._armorBody = this._armorPadL = this._armorPadR = null;
+
       this.defense = item.defense || 0;
-      this._armorMat.color.setHex(item.color    || 0xbb88ee);
-      this._pantsMat.color.setHex(item.pantColor || item.color || 0xa070dd);
+
+      if (item.id !== '__default__') {
+        const { body, padL, padR } = this._buildArmorMesh(item);
+        this._armorBody = body;
+        this._armorPadL = padL;
+        this._armorPadR = padR;
+        if (body) this.group.add(body);
+        if (padL) this._leftArmPivot.add(padL);
+        if (padR) this._rightArmPivot.add(padR);
+      }
     }
+  }
+
+  // Returns { body: Group, padL: Mesh|null, padR: Mesh|null }
+  _buildArmorMesh(item) {
+    const mk = (geo, color) => {
+      const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
+      mesh.castShadow = true;
+      return mesh;
+    };
+    const body = new THREE.Group();
+    const c = item.color || 0x888888;
+    let padL = null, padR = null;
+
+    switch (item.id) {
+
+      case 'leather_vest': {
+        // X-cross chest straps
+        [0.44, -0.44].forEach(angle => {
+          const strap = mk(new THREE.BoxGeometry(0.08, 0.78, 0.07), c);
+          strap.position.set(0, 1.06, 0.43);
+          strap.rotation.z = angle;
+          body.add(strap);
+        });
+        // Metal buckle
+        const buckle = mk(new THREE.BoxGeometry(0.14, 0.14, 0.07), 0xcc9922);
+        buckle.position.set(0, 1.06, 0.47);
+        body.add(buckle);
+        // Waist belt
+        const belt = mk(new THREE.CylinderGeometry(0.41, 0.40, 0.10, 10), c);
+        belt.position.y = 0.66;
+        body.add(belt);
+        // Round leather shoulder pads
+        const pGeo = new THREE.SphereGeometry(0.17, 8, 6);
+        padL = mk(pGeo, c); padL.scale.set(1.1, 0.62, 0.85);
+        padR = mk(pGeo, c); padR.scale.set(1.1, 0.62, 0.85);
+        break;
+      }
+
+      case 'chain_mail': {
+        // Fitted mail shirt
+        const shirt = mk(new THREE.CylinderGeometry(0.43, 0.40, 1.05, 10), c);
+        shirt.position.y = 1.06;
+        body.add(shirt);
+        // Horizontal ring rows
+        for (let i = 0; i < 5; i++) {
+          const ring = mk(new THREE.TorusGeometry(0.41, 0.026, 6, 14), c);
+          ring.rotation.x = Math.PI / 2;
+          ring.position.y = 0.57 + i * 0.19;
+          body.add(ring);
+        }
+        // Round cap shoulders
+        const cGeo = new THREE.SphereGeometry(0.20, 8, 6);
+        padL = mk(cGeo, c); padL.scale.set(1.1, 0.68, 0.90);
+        padR = mk(cGeo, c); padR.scale.set(1.1, 0.68, 0.90);
+        break;
+      }
+
+      case 'iron_plate': {
+        const hi = 0xc8c8d8; // highlight colour
+        // Front breastplate
+        const front = mk(new THREE.BoxGeometry(0.64, 0.76, 0.10), c);
+        front.position.set(0, 1.08, 0.44);
+        body.add(front);
+        // Centre ridge
+        const ridge = mk(new THREE.BoxGeometry(0.09, 0.76, 0.06), hi);
+        ridge.position.set(0, 1.08, 0.50);
+        body.add(ridge);
+        // Back plate
+        const back = mk(new THREE.BoxGeometry(0.60, 0.72, 0.10), c);
+        back.position.set(0, 1.08, -0.44);
+        body.add(back);
+        // Tassets (hanging plates at hips)
+        [-0.19, 0.19].forEach(tx => {
+          const t = mk(new THREE.BoxGeometry(0.20, 0.28, 0.09), c);
+          t.position.set(tx, 0.58, 0.41);
+          body.add(t);
+        });
+        // Square pauldrons (follow arm pivots)
+        padL = mk(new THREE.BoxGeometry(0.38, 0.22, 0.30), c);
+        padL.position.set(0, 0.10, 0);
+        padR = mk(new THREE.BoxGeometry(0.38, 0.22, 0.30), c);
+        padR.position.set(0, 0.10, 0);
+        break;
+      }
+
+      case 'dark_robe': {
+        const dark = 0x2a1840;
+        // Flowing robe from waist to ground
+        const robe = mk(new THREE.CylinderGeometry(0.50, 0.62, 1.55, 8), c);
+        robe.position.y = 0.76;
+        body.add(robe);
+        // Upper robe / shoulder cape
+        const cape = mk(new THREE.CylinderGeometry(0.46, 0.50, 0.42, 8), c);
+        cape.position.y = 1.50;
+        body.add(cape);
+        // Hood behind head
+        const hood = mk(new THREE.SphereGeometry(0.52, 10, 8), dark);
+        hood.scale.set(1.0, 0.82, 0.68);
+        hood.position.set(0, 1.94, -0.14);
+        body.add(hood);
+        // Glowing trim at hem
+        const trim = mk(new THREE.TorusGeometry(0.61, 0.038, 6, 16), 0x7722cc);
+        trim.rotation.x = Math.PI / 2;
+        trim.position.y = 0.01;
+        body.add(trim);
+        break;
+      }
+
+      case 'bone_armor': {
+        // Horizontal rib bars across chest
+        for (let i = 0; i < 5; i++) {
+          const rib = mk(new THREE.CylinderGeometry(0.036, 0.036, 0.72, 6), c);
+          rib.rotation.z = Math.PI / 2;
+          rib.position.set(0, 0.72 + i * 0.18, 0.41);
+          body.add(rib);
+        }
+        // Spine strip down the back
+        const spine = mk(new THREE.CylinderGeometry(0.055, 0.048, 0.90, 6), c);
+        spine.position.set(0, 1.08, -0.42);
+        body.add(spine);
+        // Skull-cap shoulder pieces
+        const sGeo = new THREE.SphereGeometry(0.20, 8, 6);
+        padL = mk(sGeo, c); padL.scale.set(1.0, 0.60, 0.80);
+        padR = mk(sGeo, c); padR.scale.set(1.0, 0.60, 0.80);
+        break;
+      }
+    }
+
+    return { body, padL, padR };
   }
 
   _buildWeaponMesh(item) {
