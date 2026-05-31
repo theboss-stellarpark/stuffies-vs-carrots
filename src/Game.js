@@ -9,19 +9,22 @@ import { randomDrop, randomDropL2, findItemById, SAVE_KEY } from './Items.js?v=3
 import { MobileControls } from './MobileControls.js?v=3';
 import { DungeonMap } from './DungeonMap.js?v=3';
 import { CyCarrot } from './CyCarrot.js';
+import { CarrotSoldier } from './CarrotSoldier.js';
+import { DebugPanel } from './DebugPanel.js';
 
 const TILE = 3;
 
 const LEVELS = {
-  1: { enemies: 24, cyCarrots: 12, gridSize: 42 },
-  2: { enemies: 40, cyCarrots: 20, gridSize: 52 },
+  1: { enemies: 24, cyCarrots: 12, soldiers: 0,  gridSize: 42 },
+  2: { enemies: 20, cyCarrots: 20, soldiers: 20, gridSize: 52 },
 };
 const LOOT_CHANCE = 0.10;
 
 export class Game {
-  constructor(level = 1, saveData = null) {
-    this._level    = level;
-    this._saveData = saveData;
+  constructor(level = 1, saveData = null, character = 'stuffy') {
+    this._level     = level;
+    this._saveData  = saveData;
+    this._character = character;
     this._initRenderer();
     this._initScene();
     this._buildWorld();
@@ -69,13 +72,15 @@ export class Game {
     this.dungeon.generate(cfg.gridSize, cfg.gridSize);
 
     const startPos = this.dungeon.getStartPosition();
-    this.player = new Player(this.scene, startPos);
+    this.player = new Player(this.scene, startPos, this._character);
 
-    const spawnPos   = this.dungeon.getSpawnPositions(cfg.enemies);
-    const cySpawnPos = this.dungeon.getSpawnPositions(cfg.cyCarrots);
+    const spawnPos      = this.dungeon.getSpawnPositions(cfg.enemies);
+    const cySpawnPos    = this.dungeon.getSpawnPositions(cfg.cyCarrots);
+    const soldierPos    = this.dungeon.getSpawnPositions(cfg.soldiers);
     this.enemies = [
       ...spawnPos.map(p => new Enemy(this.scene, p)),
       ...cySpawnPos.map(p => new CyCarrot(this.scene, p)),
+      ...soldierPos.map(p => new CarrotSoldier(this.scene, p)),
     ];
     this._totalEnemies = this.enemies.length;
 
@@ -98,12 +103,24 @@ export class Game {
     // Dungeon map overlay
     this.dungeonMap = new DungeonMap(this.dungeon);
 
+    // Debug panel
+    this.debugPanel = new DebugPanel(item => {
+      if (item.type === 'weapon') {
+        this.inventory.equippedWeapon = item;
+      } else {
+        this.inventory.equippedArmor = item;
+      }
+      this.player.equip(item);
+      if (this.inventory._visible) this.inventory._refresh();
+    });
+
     // Mobile controls (no-op on desktop)
     this.mobile = new MobileControls(this.renderer.domElement);
     if (this.mobile.enabled) {
       this.mobile.setCallbacks({
         onAttack:    () => this._playerAttack(),
         onPotion:    () => this._usePotion(),
+        onDash:      () => this._playerDash(),
         onInventory: () => this.inventory.toggle(),
         onMap:       () => this.dungeonMap.toggle(),
       });
@@ -160,6 +177,7 @@ export class Game {
     this._potionCooldownLeft = 0;
 
     document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT') return;
       this.keys[e.code] = true;
       if (e.code === 'Space') { e.preventDefault(); this._playerAttack(); }
       if (e.code === 'KeyQ')  { e.preventDefault(); this._usePotion(); }
@@ -170,6 +188,14 @@ export class Game {
       if (e.code === 'KeyF') {
         e.preventDefault();
         this.dungeonMap.toggle();
+      }
+      if (e.code === 'Backquote') {
+        e.preventDefault();
+        this.debugPanel.toggle();
+      }
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        e.preventDefault();
+        this._playerDash();
       }
     });
     document.addEventListener('keyup', e => { this.keys[e.code] = false; });
@@ -210,7 +236,8 @@ export class Game {
       toEnemy.normalize();
       const angle = Math.acos(Math.max(-1, Math.min(1, playerDir.dot(toEnemy))));
       if (angle < arc / 2) {
-        const dmg = minD + Math.floor(Math.random() * (maxD - minD + 1));
+        const boost = this._character === 'slothy' ? 1.10 : 1.0;
+        const dmg = Math.floor((minD + Math.floor(Math.random() * (maxD - minD + 1))) * boost);
         enemy.takeDamage(dmg);
         this.ui.showDamageAt(
           enemy.group.position.clone().add(new THREE.Vector3(0, 2.2, 0)), dmg
@@ -218,6 +245,28 @@ export class Game {
         if (enemy.dead) this.ui.addScore(100);
       }
     });
+  }
+
+  _playerDash() {
+    if (this.ui.gameOver || this.ui.victory || this.player.dead) return;
+    if (!this.player.canDash()) return;
+
+    const forward = new THREE.Vector3();
+    this.camera.getWorldDirection(forward);
+    forward.y = 0;
+    forward.normalize();
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+    const dir = new THREE.Vector3();
+    if (this.keys['KeyW'] || this.keys['ArrowUp'])    dir.add(forward);
+    if (this.keys['KeyS'] || this.keys['ArrowDown'])  dir.sub(forward);
+    if (this.keys['KeyD'] || this.keys['ArrowRight']) dir.add(right);
+    if (this.keys['KeyA'] || this.keys['ArrowLeft'])  dir.sub(right);
+    if (dir.length() < 0.01)
+      dir.set(Math.sin(this.player.facingAngle), 0, Math.cos(this.player.facingAngle));
+
+    this.player.dash(dir);
+    this._spawnDashParticles(this.player.position);
   }
 
   _usePotion() {
@@ -253,6 +302,25 @@ export class Game {
   }
 
   // ─── Particles ───────────────────────────────────────────────────────────
+
+  _spawnDashParticles(position) {
+    const colors = [0xaaddff, 0x88ccff, 0xffffff];
+    for (let i = 0; i < 7; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.07, 0.07, 0.20),
+        new THREE.MeshBasicMaterial({ color: colors[i % colors.length] })
+      );
+      mesh.position.copy(position).add(new THREE.Vector3(
+        (Math.random() - 0.5) * 0.7, 0.3 + Math.random() * 1.2, (Math.random() - 0.5) * 0.7
+      ));
+      this.scene.add(mesh);
+      this.particles.push({
+        mesh,
+        vel: new THREE.Vector3((Math.random() - 0.5) * 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 3),
+        life: 0.20 + Math.random() * 0.12,
+      });
+    }
+  }
 
   _spawnHealParticles(position) {
     const colors = [0x44ff88, 0x88ffaa, 0x22dd66];
@@ -322,7 +390,7 @@ export class Game {
     const elapsed = this.clock.getElapsedTime();
 
     const gameActive = !this.ui.gameOver && !this.ui.victory;
-    const paused = this.inventory._visible;
+    const paused = this.inventory._visible || this.debugPanel.visible;
 
     if (gameActive && !paused) {
       const touchMove = this.mobile.enabled ? this.mobile.movement : null;
@@ -376,6 +444,9 @@ export class Game {
       this._potionCooldownLeft = Math.max(0, this._potionCooldownLeft - delta);
       this.ui.setPotionCooldown(this._potionCooldownLeft, this._potionCooldownMax);
     }
+
+    this.ui.setDashCooldown(this.player.dashCooldownLeft, this.player.dashCooldown);
+    this.ui.updateCoins();
 
     const liveEnemies = this.enemies.filter(e => !e.dead).length;
     this.ui.update(liveEnemies);

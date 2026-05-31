@@ -1,10 +1,11 @@
-import { SAVE_KEY } from './Items.js?v=3';
+import { SAVE_KEY, META_KEY, SLOTHY_COST, getMeta, saveMeta } from './Items.js?v=3';
 
 export class HomeScreen {
   constructor(onNewGame, onContinue) {
     this._onNewGame  = onNewGame;
     this._onContinue = onContinue;
     this._hasSave    = !!localStorage.getItem(SAVE_KEY);
+    this._meta       = getMeta();
     this._build();
   }
 
@@ -50,6 +51,78 @@ export class HomeScreen {
       text-align:center;
     `;
 
+    // ── Character selector ──
+    const charWrap = document.createElement('div');
+    charWrap.style.cssText = 'display:flex;gap:16px;margin-bottom:32px;';
+
+    const chars = [
+      { id: 'stuffy', label: 'Fluffy', icon: '👽', desc: 'Alien warrior', always: true },
+      { id: 'slothy', label: 'Slothy', icon: '🦥', desc: '+10% attack', always: false },
+    ];
+
+    chars.forEach(ch => {
+      const unlocked = ch.always || this._meta.unlockedChars.includes(ch.id);
+      const selected = this._meta.selectedChar === ch.id;
+
+      const card = document.createElement('div');
+      card.style.cssText = `
+        width:120px; padding:14px 10px; border-radius:10px; text-align:center;
+        border:2px solid ${selected ? '#4a9acc' : '#243a4e'};
+        background:${selected ? 'rgba(20,60,100,0.7)' : 'rgba(10,20,35,0.6)'};
+        cursor:${unlocked ? 'pointer' : 'default'};
+        transition:border-color 0.15s, background 0.15s;
+        position:relative; font-family:Georgia,serif;
+      `;
+
+      card.innerHTML = `
+        <div style="font-size:36px;margin-bottom:6px">${ch.icon}</div>
+        <div style="color:#ddeeff;font-size:13px;letter-spacing:1px">${ch.label}</div>
+        <div style="color:#5a8aaa;font-size:10px;margin-top:3px">${ch.desc}</div>
+      `;
+
+      if (!unlocked) {
+        const lockOverlay = document.createElement('div');
+        lockOverlay.style.cssText = `
+          position:absolute;inset:0;border-radius:8px;
+          background:rgba(0,0,0,0.65);
+          display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+        `;
+        lockOverlay.innerHTML = `
+          <div style="font-size:20px">🔒</div>
+          <div style="color:#ffcc44;font-size:11px;letter-spacing:1px">${SLOTHY_COST} 🪙</div>
+        `;
+
+        if (this._meta.coins >= SLOTHY_COST) {
+          lockOverlay.innerHTML += `<div style="color:#88ff88;font-size:10px;margin-top:2px">TAP TO UNLOCK</div>`;
+          lockOverlay.style.cursor = 'pointer';
+          lockOverlay.addEventListener('click', e => {
+            e.stopPropagation();
+            this._meta.coins -= SLOTHY_COST;
+            this._meta.unlockedChars.push('slothy');
+            this._meta.selectedChar = 'slothy';
+            saveMeta(this._meta);
+            this.remove();
+            new HomeScreen(this._onNewGame, this._onContinue);
+          });
+        }
+        card.appendChild(lockOverlay);
+      } else {
+        card.addEventListener('click', () => {
+          this._meta.selectedChar = ch.id;
+          saveMeta(this._meta);
+          // Refresh selection styles
+          charWrap.querySelectorAll('[data-char]').forEach(c => {
+            const isSel = c.dataset.char === ch.id;
+            c.style.borderColor = isSel ? '#4a9acc' : '#243a4e';
+            c.style.background  = isSel ? 'rgba(20,60,100,0.7)' : 'rgba(10,20,35,0.6)';
+          });
+        });
+      }
+
+      card.dataset.char = ch.id;
+      charWrap.appendChild(card);
+    });
+
     // Buttons
     const btnWrap = document.createElement('div');
     btnWrap.style.cssText = 'display:flex;flex-direction:column;gap:18px;align-items:center;';
@@ -73,6 +146,7 @@ export class HomeScreen {
 
     this._el.appendChild(title);
     this._el.appendChild(sub);
+    this._el.appendChild(charWrap);
     this._el.appendChild(btnWrap);
     this._el.appendChild(ver);
     document.body.appendChild(this._el);

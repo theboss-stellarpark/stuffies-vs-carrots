@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
 export class Player {
-  constructor(scene, position) {
+  constructor(scene, position, character = 'stuffy') {
+    this._character = character;
     this.health = 100;
     this.maxHealth = 100;
     this.speed = 7;
@@ -15,14 +16,134 @@ export class Player {
     this.dead = false;
     this._walkCycle = 0;
 
-    this._build(scene, position);
+    this._dashCooldown     = 2.5;
+    this._dashCooldownLeft = 0;
+    this._dashActive       = false;
+    this._dashTimer        = 0;
+    this._dashDir          = new THREE.Vector3();
+
+    this._character === 'slothy' ? this._buildSlothy(scene, position) : this._buildStuffie(scene, position);
   }
 
-  _build(scene, position) {
+  _buildSlothy(scene, position) {
     this.group = new THREE.Group();
 
-    // ── Materials (armor/pants swapped by equip system) ──
-    this._armorMat = new THREE.MeshLambertMaterial({ color: 0xbb88ee }); // lavender body
+    const blue  = new THREE.MeshLambertMaterial({ color: 0x7788ee });
+    const patch = new THREE.MeshLambertMaterial({ color: 0x4433aa });
+    const dark  = new THREE.MeshLambertMaterial({ color: 0x111122 });
+
+    const s = (geo, mat) => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; return m; };
+
+    // Round fluffy body
+    const body = s(new THREE.SphereGeometry(0.55, 12, 10), blue);
+    body.scale.set(1.0, 1.05, 0.92);
+    body.position.y = 1.0;
+    this.group.add(body);
+
+    // Fluffy bumps around body edges
+    [[-0.38,1.15,0.22],[0.38,1.15,0.22],[0,1.48,0.25],[-0.28,0.68,0.18],[0.28,0.68,0.18]].forEach(([x,y,z]) => {
+      const fluff = s(new THREE.SphereGeometry(0.20, 8, 6), blue);
+      fluff.position.set(x, y, z);
+      this.group.add(fluff);
+    });
+
+    // Round head blending into body
+    const head = s(new THREE.SphereGeometry(0.43, 12, 10), blue);
+    head.position.y = 1.82;
+    this.group.add(head);
+
+    // Purple eye patches
+    [-0.17, 0.17].forEach(ex => {
+      const ep = s(new THREE.SphereGeometry(0.16, 8, 6), patch);
+      ep.scale.set(1.0, 0.72, 0.48);
+      ep.position.set(ex, 1.88, 0.38);
+      this.group.add(ep);
+      // Black eye dot
+      const eye = s(new THREE.SphereGeometry(0.065, 7, 6), dark);
+      eye.position.set(ex, 1.88, 0.44);
+      this.group.add(eye);
+    });
+
+    // Black nose
+    const nose = s(new THREE.SphereGeometry(0.075, 7, 6), dark);
+    nose.scale.set(1.2, 0.85, 0.75);
+    nose.position.set(0, 1.72, 0.46);
+    this.group.add(nose);
+
+    // Smile
+    [-0.10, 0.10].forEach((sx, i) => {
+      const smile = s(new THREE.BoxGeometry(0.13, 0.04, 0.03), dark);
+      smile.position.set(sx, 1.60, 0.46);
+      smile.rotation.z = (i === 0 ? 1 : -1) * 0.48;
+      this.group.add(smile);
+    });
+
+    // Long drooping arms
+    this._leftArmPivot = new THREE.Group();
+    this._leftArmPivot.position.set(-0.52, 1.32, 0);
+    const lArm = s(new THREE.CylinderGeometry(0.075, 0.062, 0.85, 7), blue);
+    lArm.position.set(0, -0.425, 0);   // centered so TOP is at pivot = connected to shoulder
+    lArm.rotation.z = 0.28;            // droop outward
+    this._leftArmPivot.add(lArm);
+    const lHand = s(new THREE.SphereGeometry(0.10, 7, 6), blue);
+    lHand.position.set(0.24, -0.82, 0);
+    this._leftArmPivot.add(lHand);
+    [-0.07, 0, 0.07].forEach(cx => {
+      const claw = s(new THREE.CylinderGeometry(0.022, 0.012, 0.13, 4), dark);
+      claw.position.set(cx + 0.24, -0.97, 0);
+      this._leftArmPivot.add(claw);
+    });
+    this.group.add(this._leftArmPivot);
+
+    this._rightArmPivot = new THREE.Group();
+    this._rightArmPivot.position.set(0.52, 1.32, 0);
+    const rArm = s(new THREE.CylinderGeometry(0.075, 0.062, 0.85, 7), blue);
+    rArm.position.set(0, -0.425, 0);   // centered so TOP is at pivot = connected to shoulder
+    rArm.rotation.z = -0.28;           // droop outward
+    this._rightArmPivot.add(rArm);
+    const rHand = s(new THREE.SphereGeometry(0.10, 7, 6), blue);
+    rHand.position.set(-0.24, -0.82, 0);
+    this._rightArmPivot.add(rHand);
+    [-0.07, 0, 0.07].forEach(cx => {
+      const claw = s(new THREE.CylinderGeometry(0.022, 0.012, 0.13, 4), dark);
+      claw.position.set(cx - 0.24, -0.97, 0);
+      this._rightArmPivot.add(claw);
+    });
+    this.group.add(this._rightArmPivot);
+
+    this._weaponGroup = this._buildWeaponMesh({ shape: 'sword', color: 0xd0d0ee, guardColor: 0xaa8833 });
+    this._rightArmPivot.add(this._weaponGroup);
+
+    // Short stubby legs
+    const legGeo = new THREE.BoxGeometry(0.30, 0.50, 0.30);
+    this._leftLeg  = s(legGeo, blue); this._leftLeg.position.set(-0.20, 0.42, 0);
+    this._rightLeg = s(legGeo, blue); this._rightLeg.position.set( 0.20, 0.42, 0);
+    this.group.add(this._leftLeg);
+    this.group.add(this._rightLeg);
+
+    // Feet with claws
+    [-0.20, 0.20].forEach(fx => {
+      const foot = s(new THREE.SphereGeometry(0.16, 8, 6), blue);
+      foot.scale.set(1.0, 0.6, 1.4);
+      foot.position.set(fx, 0.16, 0.06);
+      this.group.add(foot);
+      [-0.07, 0, 0.07].forEach(tx => {
+        const toe = s(new THREE.CylinderGeometry(0.02, 0.012, 0.12, 4), dark);
+        toe.position.set(fx + tx, 0.10, 0.22);
+        this.group.add(toe);
+      });
+    });
+
+    this._armorBody = null; this._armorPadL = null; this._armorPadR = null;
+    this._materials = [{ mat: blue, origColor: blue.color.clone() }];
+    this.group.position.copy(position);
+    scene.add(this.group);
+    this.mesh = this.group;
+  }
+
+  _buildStuffie(scene, position) {
+    this.group = new THREE.Group();
+    this._armorMat = new THREE.MeshLambertMaterial({ color: 0xbb88ee });
     this._pantsMat = new THREE.MeshLambertMaterial({ color: 0xa070dd }); // slightly darker limbs
     const eyeDarkMat  = new THREE.MeshLambertMaterial({ color: 0x0e1a10 });
     const eyeGreenMat = new THREE.MeshBasicMaterial({ color: 0x33bb55 });
@@ -267,31 +388,74 @@ export class Player {
         break;
       }
 
-      case 'iron_plate': {
-        const hi = 0xc8c8d8; // highlight colour
-        // Front breastplate
-        const front = mk(new THREE.BoxGeometry(0.64, 0.76, 0.10), c);
-        front.position.set(0, 1.08, 0.44);
-        body.add(front);
-        // Centre ridge
-        const ridge = mk(new THREE.BoxGeometry(0.09, 0.76, 0.06), hi);
-        ridge.position.set(0, 1.08, 0.50);
-        body.add(ridge);
-        // Back plate
-        const back = mk(new THREE.BoxGeometry(0.60, 0.72, 0.10), c);
-        back.position.set(0, 1.08, -0.44);
-        body.add(back);
-        // Tassets (hanging plates at hips)
-        [-0.19, 0.19].forEach(tx => {
-          const t = mk(new THREE.BoxGeometry(0.20, 0.28, 0.09), c);
-          t.position.set(tx, 0.58, 0.41);
-          body.add(t);
+      case 'spaceship_armor': {
+        const lightBlue = 0x88ccee;
+
+        // Main chest hull (light grey)
+        const hull = mk(new THREE.BoxGeometry(0.68, 0.64, 0.10), c);
+        hull.position.set(0, 1.10, 0.43);
+        body.add(hull);
+
+        // Central triangle cockpit (light blue) — 3-sided cone pointing up
+        const triMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(0, 0.20, 0.44, 3, 1),
+          new THREE.MeshLambertMaterial({ color: lightBlue })
+        );
+        triMesh.rotation.y = Math.PI / 6;
+        triMesh.position.set(0, 1.10, 0.50);
+        body.add(triMesh);
+
+        // Horizontal wing panels (light grey, one each side)
+        [-1, 1].forEach(side => {
+          const wing = mk(new THREE.BoxGeometry(0.30, 0.18, 0.08), c);
+          wing.position.set(side * 0.46, 1.10, 0.40);
+          wing.rotation.z = side * -0.18;
+          body.add(wing);
+
+          // Wing tip fin
+          const fin = mk(new THREE.BoxGeometry(0.08, 0.28, 0.07), c);
+          fin.position.set(side * 0.58, 1.02, 0.40);
+          body.add(fin);
         });
-        // Square pauldrons (follow arm pivots)
-        padL = mk(new THREE.BoxGeometry(0.38, 0.22, 0.30), c);
-        padL.position.set(0, 0.10, 0);
-        padR = mk(new THREE.BoxGeometry(0.38, 0.22, 0.30), c);
-        padR.position.set(0, 0.10, 0);
+
+        // Bottom thruster strip (front)
+        const thruster = mk(new THREE.BoxGeometry(0.52, 0.10, 0.09), c);
+        thruster.position.set(0, 0.74, 0.43);
+        body.add(thruster);
+
+        // ── Back (mirror of front at z = -0.43) ──
+        const hullB = mk(new THREE.BoxGeometry(0.68, 0.64, 0.10), c);
+        hullB.position.set(0, 1.10, -0.43);
+        body.add(hullB);
+
+        const triBack = new THREE.Mesh(
+          new THREE.CylinderGeometry(0, 0.20, 0.44, 3, 1),
+          new THREE.MeshLambertMaterial({ color: lightBlue })
+        );
+        triBack.rotation.y = Math.PI / 6;
+        triBack.position.set(0, 1.10, -0.50);
+        body.add(triBack);
+
+        [-1, 1].forEach(side => {
+          const wingB = mk(new THREE.BoxGeometry(0.30, 0.18, 0.08), c);
+          wingB.position.set(side * 0.46, 1.10, -0.40);
+          wingB.rotation.z = side * -0.18;
+          body.add(wingB);
+
+          const finB = mk(new THREE.BoxGeometry(0.08, 0.28, 0.07), c);
+          finB.position.set(side * 0.58, 1.02, -0.40);
+          body.add(finB);
+        });
+
+        const thrusterB = mk(new THREE.BoxGeometry(0.52, 0.10, 0.09), c);
+        thrusterB.position.set(0, 0.74, -0.43);
+        body.add(thrusterB);
+
+        // Angled pauldrons that echo the wing shape
+        padL = mk(new THREE.BoxGeometry(0.36, 0.14, 0.28), c);
+        padL.position.set(0, 0.08, 0);
+        padR = mk(new THREE.BoxGeometry(0.36, 0.14, 0.28), c);
+        padR.position.set(0, 0.08, 0);
         break;
       }
 
@@ -523,6 +687,40 @@ export class Player {
         break;
       }
 
+      case 'banana': {
+        // Curved banana blade — 6 segments forming an arc
+        for (let i = 0; i < 6; i++) {
+          const t     = i / 5;
+          const curve = t * 0.52;
+          const seg   = new THREE.Mesh(
+            new THREE.BoxGeometry(0.12, 0.24, 0.08),
+            new THREE.MeshLambertMaterial({ color: item.color || 0xffdd00 })
+          );
+          seg.position.set(-Math.sin(curve) * 0.32, -0.68 + t * 1.12, 0);
+          seg.rotation.z = -curve;
+          group.add(seg);
+        }
+        // Green stem tip
+        const stem = new THREE.Mesh(
+          new THREE.ConeGeometry(0.055, 0.18, 5),
+          new THREE.MeshLambertMaterial({ color: item.guardColor || 0x44aa22 })
+        );
+        stem.position.set(-Math.sin(0.52) * 0.32, 0.50, 0);
+        stem.rotation.z = -0.52;
+        group.add(stem);
+        // Peel strips as guard, splaying outward
+        [-0.48, 0, 0.48].forEach((rx, i) => {
+          const peel = new THREE.Mesh(
+            new THREE.BoxGeometry(0.09, 0.34, 0.06),
+            new THREE.MeshLambertMaterial({ color: item.color || 0xffdd00 })
+          );
+          peel.position.set(rx * 0.5, -0.10, 0);
+          peel.rotation.z = (i - 1) * 0.52;
+          group.add(peel);
+        });
+        break;
+      }
+
       default: { // sword
         const blade = b(0.08, 1.12, 0.06);
         blade.position.y = -0.56;
@@ -544,8 +742,21 @@ export class Player {
     this.health = Math.min(this.maxHealth, this.health + amount);
   }
 
+  get dashCooldownLeft() { return this._dashCooldownLeft; }
+  get dashCooldown()     { return this._dashCooldown; }
+  canDash() { return !this._dashActive && this._dashCooldownLeft <= 0 && !this.dead; }
+
+  dash(dir) {
+    if (!this.canDash()) return;
+    this._dashDir.copy(dir).normalize();
+    this._dashActive       = true;
+    this._dashTimer        = 0.18;
+    this._dashCooldownLeft = this._dashCooldown;
+    this.facingAngle       = Math.atan2(dir.x, dir.z);
+  }
+
   takeDamage(amount) {
-    if (this.invincible || this.dead) return;
+    if (this.invincible || this._dashActive || this.dead) return;
     const reduced = Math.max(1, amount - this.defense);
     this.health = Math.max(0, this.health - reduced);
     this.invincible = true;
@@ -556,6 +767,29 @@ export class Player {
   // touchMove: optional {x, y} from MobileControls (-1..1 each axis)
   update(delta, keys, camera, dungeon, touchMove = null) {
     if (this.dead) return;
+
+    // Dash cooldown tick
+    if (this._dashCooldownLeft > 0)
+      this._dashCooldownLeft = Math.max(0, this._dashCooldownLeft - delta);
+
+    // Dash movement takes full priority
+    if (this._dashActive) {
+      this._dashTimer -= delta;
+      const spd = 30 * delta;
+      const nx = this.group.position.x + this._dashDir.x * spd;
+      const nz = this.group.position.z + this._dashDir.z * spd;
+      if (dungeon.isWalkable(nx, this.group.position.z)) this.group.position.x = nx;
+      if (dungeon.isWalkable(this.group.position.x, nz)) this.group.position.z = nz;
+      this._walkCycle += delta * 20;
+      const w = Math.sin(this._walkCycle) * 0.5;
+      this._leftLeg.rotation.x  =  w;
+      this._rightLeg.rotation.x = -w;
+      this.group.rotation.y = this.facingAngle;
+      // Blink faster during dash
+      this.group.visible = Math.floor(Date.now() / 45) % 2 === 0;
+      if (this._dashTimer <= 0) this._dashActive = false;
+      return;
+    }
 
     const forward = new THREE.Vector3();
     camera.getWorldDirection(forward);
@@ -600,13 +834,33 @@ export class Player {
     this.group.rotation.y = this.facingAngle;
 
     if (this.attackAnim > 0) {
-      this.attackAnim -= delta * 5;
+      this.attackAnim -= delta * 3.5;
       const t = Math.max(0, this.attackAnim);
-      this._rightArmPivot.rotation.x = -Math.PI * 0.75 * Math.sin(t * Math.PI);
-      this._weaponGroup.rotation.x   =  Math.PI * 0.30 * Math.sin(t * Math.PI);
+
+      let rx, rz;
+      if (t > 0.70) {
+        // Wind-up: arm pulls toward camera (behind player) and out to right
+        const p = (1 - t) / 0.30;
+        rx = -0.6 * p;   //  0   → -0.6  (toward camera = behind player)
+        rz = -0.7 * p;   //  0   → -0.7  (out to right side)
+      } else {
+        // Sweep: arm drives AWAY from camera (forward, toward enemies)
+        // while sweeping right to left across the front of the character
+        const p     = (0.70 - t) / 0.70;
+        const eased = 1 - Math.pow(1 - p, 2);
+        rx = -0.6 + eased * 2.0;   // -0.6 → +1.4  (weapon swings toward enemies = forward)
+        rz = -0.7 + eased * 1.5;   // -0.7 → +0.8  (sweeps right to left)
+      }
+
+      this._rightArmPivot.rotation.x = rx;
+      this._rightArmPivot.rotation.z = rz;
+      this._rightArmPivot.rotation.y = 0;
+
       if (this.attackAnim < 0) this.attackAnim = 0;
     } else {
       this._rightArmPivot.rotation.x *= 0.8;
+      this._rightArmPivot.rotation.y *= 0.8;
+      this._rightArmPivot.rotation.z *= 0.8;
     }
 
     const visible = !this.invincible || Math.floor(Date.now() / 80) % 2 === 0;

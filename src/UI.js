@@ -55,6 +55,15 @@ export class UI {
     this._scoreEl.textContent = 'Score: 0';
     hud.appendChild(this._scoreEl);
 
+    // Coin counter (below score)
+    this._coinEl = document.createElement('div');
+    this._coinEl.style.cssText = `
+      position:fixed;top:44px;right:20px;
+      color:#ffcc44;font-size:13px;letter-spacing:1px;
+    `;
+    this._coinEl.textContent = '';
+    hud.appendChild(this._coinEl);
+
     // Enemy counter (top center)
     this._enemyCountEl = document.createElement('div');
     this._enemyCountEl.style.cssText = `
@@ -71,7 +80,7 @@ export class UI {
       color:#667788;font-size:12px;line-height:1.8;
       font-family:monospace;
     `;
-    hint.innerHTML = 'WASD / Arrows — Move<br>Click / Space — Attack<br>Q — Potion &nbsp; F — Map<br>I / Tab — Inventory';
+    hint.innerHTML = 'WASD / Arrows — Move<br>Click / Space — Attack<br>Shift — Dash &nbsp; Q — Potion<br>F — Map &nbsp; I / Tab — Inventory';
     hud.appendChild(hint);
 
     // Overlay (game over / victory)
@@ -161,6 +170,48 @@ export class UI {
     this._potionSlot.appendChild(this._potionKey);
     this._potionSlot.appendChild(this._potionCdOverlay);
     hud.appendChild(this._potionSlot);
+
+    // ── Dash slot (right of health bar, mirrors potion slot) ──
+    this._dashSlot = document.createElement('div');
+    this._dashSlot.style.cssText = `
+      position:fixed; bottom:22px; left:calc(50% + 96px);
+      width:52px; height:52px;
+      background:#0a1218;
+      border:2px solid #2a6a8a;
+      border-radius:8px;
+      display:flex; align-items:center; justify-content:center;
+      flex-direction:column;
+      overflow:hidden;
+      box-shadow:0 0 8px #1a4a6a;
+    `;
+    const dashIcon = document.createElement('div');
+    dashIcon.style.cssText = 'font-size:22px; line-height:1; z-index:2; position:relative;';
+    dashIcon.textContent = '💨';
+    const dashKey = document.createElement('div');
+    dashKey.style.cssText = 'font-size:10px; color:#5a9aaa; letter-spacing:1px; z-index:2; position:relative; margin-top:1px;';
+    dashKey.textContent = 'SHIFT';
+
+    this._dashCdOverlay = document.createElement('div');
+    this._dashCdOverlay.style.cssText = `
+      position:absolute; inset:0;
+      background:rgba(0,0,0,0.72);
+      display:none; align-items:center; justify-content:center;
+    `;
+    this._dashCdText = document.createElement('div');
+    this._dashCdText.style.cssText = 'color:#ffffff; font-size:15px; font-weight:bold; font-family:monospace;';
+    this._dashCdOverlay.appendChild(this._dashCdText);
+
+    this._dashSlot.appendChild(dashIcon);
+    this._dashSlot.appendChild(dashKey);
+    this._dashSlot.appendChild(this._dashCdOverlay);
+    hud.appendChild(this._dashSlot);
+  }
+
+  updateCoins() {
+    try {
+      const meta = JSON.parse(localStorage.getItem('stuffies_meta')) || {};
+      this._coinEl.textContent = `🪙 ${meta.coins || 0}`;
+    } catch { this._coinEl.textContent = '🪙 0'; }
   }
 
   update(enemiesLeft) {
@@ -172,6 +223,15 @@ export class UI {
       this._enemyCountEl.textContent = enemiesLeft > 0
         ? `${enemiesLeft} ENEMIES REMAIN`
         : '';
+    }
+  }
+
+  setDashCooldown(left, max) {
+    if (left > 0) {
+      this._dashCdOverlay.style.display = 'flex';
+      this._dashCdText.textContent = Math.ceil(left);
+    } else {
+      this._dashCdOverlay.style.display = 'none';
     }
   }
 

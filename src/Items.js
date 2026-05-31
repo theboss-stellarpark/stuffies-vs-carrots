@@ -1,11 +1,23 @@
-export const SAVE_KEY = 'stuffies_save';
+export const SAVE_KEY   = 'stuffies_save';
+export const META_KEY   = 'stuffies_meta';
+export const SLOTHY_COST = 150;
+export const SELL_VALUE  = { common: 10, rare: 30, epic: 75 };
+
+export function getMeta() {
+  try { return { ...defaultMeta(), ...JSON.parse(localStorage.getItem(META_KEY)) }; }
+  catch { return defaultMeta(); }
+}
+export function saveMeta(meta) { localStorage.setItem(META_KEY, JSON.stringify(meta)); }
+function defaultMeta() {
+  return { coins: 0, unlockedChars: ['stuffy'], selectedChar: 'stuffy' };
+}
 
 export const WEAPONS = [
   {
-    id: 'short_sword', name: 'Short Sword', type: 'weapon', rarity: 'common',
-    damage: [22, 35], cooldown: 0.48, range: 3.8, arc: Math.PI * 0.65,
-    color: 0xd0d0ee, guardColor: 0xaa8833, shape: 'sword', icon: '⚔️',
-    desc: 'A reliable blade for any adventurer.',
+    id: 'banana_blade', name: 'Banana Blade', type: 'weapon', rarity: 'common',
+    damage: [22, 35], cooldown: 0.48, range: 3.8, arc: Math.PI * 0.70,
+    color: 0xffdd00, guardColor: 0x44aa22, shape: 'banana', icon: '🍌',
+    desc: 'A perfectly ripened blade. Surprisingly dangerous.',
   },
   {
     id: 'greatsword', name: 'Greatsword', type: 'weapon', rarity: 'rare',
@@ -45,9 +57,9 @@ export const ARMORS = [
     desc: 'Interlocked metal rings.',
   },
   {
-    id: 'iron_plate', name: 'Iron Plate', type: 'armor', rarity: 'rare',
-    defense: 6, color: 0x9999aa, pantColor: 0x667788, icon: '🛡️',
-    desc: 'Heavy but very protective.',
+    id: 'spaceship_armor', name: 'Spaceship Armor', type: 'armor', rarity: 'rare',
+    defense: 6, color: 0xd0d8e4, pantColor: 0xb0bcc8, icon: '🚀',
+    desc: 'Forged from salvaged hull plating. The triangle is load-bearing.',
   },
   {
     id: 'dark_robe', name: 'Dark Robe', type: 'armor', rarity: 'epic',

@@ -1,13 +1,14 @@
-import { RARITY_COLOR, RARITY_BORDER, defaultWeapon, defaultArmor } from './Items.js?v=3';
+import { RARITY_COLOR, RARITY_BORDER, defaultWeapon, defaultArmor, SELL_VALUE, getMeta, saveMeta } from './Items.js?v=3';
 
 export class Inventory {
   constructor() {
-    this.items = [];          // bag slots (max 8)
+    this.items = [];
     this.maxSize = 8;
     this.equippedWeapon = null;
     this.equippedArmor  = null;
     this._visible = false;
-    this.onEquip = null;      // callback(item)
+    this.onEquip   = null;
+    this.onSell    = null;   // callback(coins earned)
     this._build();
   }
 
@@ -42,9 +43,16 @@ export class Inventory {
       display:flex; justify-content:space-between; align-items:center;
       margin-bottom:16px; border-bottom:1px solid #2a2038; padding-bottom:10px;
     `;
+    const titleLeft = document.createElement('div');
+    titleLeft.style.cssText = 'display:flex;align-items:center;gap:14px;';
     const title = document.createElement('div');
     title.textContent = '⚔  INVENTORY';
     title.style.cssText = 'font-size:17px; letter-spacing:3px; color:#ffcc88;';
+    this._coinDisplay = document.createElement('div');
+    this._coinDisplay.style.cssText = 'font-size:13px; color:#ffcc44; letter-spacing:1px;';
+    this._updateCoinDisplay();
+    titleLeft.appendChild(title);
+    titleLeft.appendChild(this._coinDisplay);
 
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '✕';
@@ -53,7 +61,7 @@ export class Inventory {
       width:28px; height:28px; cursor:pointer; border-radius:4px; font-size:13px;
     `;
     closeBtn.onclick = () => this.hide();
-    titleBar.appendChild(title);
+    titleBar.appendChild(titleLeft);
     titleBar.appendChild(closeBtn);
     this._panel.appendChild(titleBar);
 
@@ -178,9 +186,23 @@ export class Inventory {
       statEl.textContent = `🛡 -${item.defense} dmg taken`;
     }
 
+    // Sell button
+    const sellVal = SELL_VALUE[item.rarity] || 10;
+    const sellBtn = document.createElement('button');
+    sellBtn.textContent = `Sell 🪙${sellVal}`;
+    sellBtn.style.cssText = `
+      margin-top:5px; width:100%; padding:3px 0;
+      background:#1a0f0a; border:1px solid #553311; border-radius:4px;
+      color:#cc8844; font-size:9px; cursor:pointer; letter-spacing:1px;
+    `;
+    sellBtn.onmouseenter = () => sellBtn.style.background = '#2a1a0a';
+    sellBtn.onmouseleave = () => sellBtn.style.background = '#1a0f0a';
+    sellBtn.onclick = e => { e.stopPropagation(); this._sellItem(item, sellVal); };
+
     card.appendChild(iconEl);
     card.appendChild(nameEl);
     card.appendChild(statEl);
+    card.appendChild(sellBtn);
 
     card.onmouseenter = () => {
       card.style.borderColor = rc;
@@ -198,6 +220,22 @@ export class Inventory {
     card.onclick = e => { e.stopPropagation(); this._equipFromBag(item); };
 
     return card;
+  }
+
+  _sellItem(item, coins) {
+    this.items = this.items.filter(i => i !== item);
+    const meta = getMeta();
+    meta.coins += coins;
+    saveMeta(meta);
+    this._updateCoinDisplay();
+    if (this.onSell) this.onSell(coins);
+    this._refresh();
+  }
+
+  _updateCoinDisplay() {
+    if (!this._coinDisplay) return;
+    const meta = getMeta();
+    this._coinDisplay.textContent = `🪙 ${meta.coins}`;
   }
 
   // ─── Equip / unequip ────────────────────────────────────────────────────
@@ -244,7 +282,7 @@ export class Inventory {
   get isFull() { return this.items.length >= this.maxSize; }
 
   toggle() { this._visible ? this.hide() : this.show(); }
-  show()   { this._visible = true;  this._refresh(); this._panel.style.display = 'block'; }
+  show()   { this._visible = true;  this._updateCoinDisplay(); this._refresh(); this._panel.style.display = 'block'; }
   hide()   { this._visible = false; this._panel.style.display = 'none'; }
 
   // ─── Refresh UI ─────────────────────────────────────────────────────────

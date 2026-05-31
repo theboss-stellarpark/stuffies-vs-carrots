@@ -147,14 +147,14 @@ export class Enemy {
   _buildHealthBar(scene) {
     this._hbGroup = new THREE.Group();
 
-    const bgGeo = new THREE.PlaneGeometry(1.1, 0.14);
-    const bgMat = new THREE.MeshBasicMaterial({ color: 0x220000, depthTest: false, transparent: true, opacity: 0.85 });
-    const bg = new THREE.Mesh(bgGeo, bgMat);
+    const bg = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.2, 0.22),
+      new THREE.MeshBasicMaterial({ color: 0x333333, depthTest: false })
+    );
     this._hbGroup.add(bg);
 
-    const fgGeo = new THREE.PlaneGeometry(1.1, 0.14);
-    this._hbFgMat = new THREE.MeshBasicMaterial({ color: 0xdd2200, depthTest: false });
-    this._hbFg = new THREE.Mesh(fgGeo, this._hbFgMat);
+    this._hbFgMat = new THREE.MeshBasicMaterial({ color: 0x44dd22, depthTest: false });
+    this._hbFg = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.22), this._hbFgMat);
     this._hbFg.position.z = 0.005;
     this._hbGroup.add(this._hbFg);
 
@@ -256,14 +256,12 @@ export class Enemy {
 
       const ratio = this.health / this.maxHealth;
       this._hbFg.scale.x = Math.max(0.001, ratio);
-      this._hbFg.position.x = -(1 - ratio) * 0.55;
+      this._hbFg.position.x = -(1 - ratio) * 0.60;
 
-      // Color shift red as health drops
-      if (ratio > 0.5) {
-        this._hbFgMat.color.setRGB(0.6 + (1 - ratio) * 0.8, 0.2, 0.05);
-      } else {
-        this._hbFgMat.color.setRGB(0.85, 0.08, 0.05);
-      }
+      // Green → yellow → red
+      const r = Math.min(1, 2 * (1 - ratio));
+      const g = Math.min(1, 2 * ratio);
+      this._hbFgMat.color.setRGB(r, g, 0);
     }
   }
 }

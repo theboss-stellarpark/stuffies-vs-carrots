@@ -143,13 +143,13 @@ export class CyCarrot {
   _buildHealthBar(scene) {
     this._hbGroup = new THREE.Group();
     const bg = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.1, 0.14),
-      new THREE.MeshBasicMaterial({ color: 0x001133, depthTest: false, transparent: true, opacity: 0.85 })
+      new THREE.PlaneGeometry(1.2, 0.22),
+      new THREE.MeshBasicMaterial({ color: 0x333333, depthTest: false })
     );
     this._hbGroup.add(bg);
 
-    this._hbFgMat = new THREE.MeshBasicMaterial({ color: 0x0088ff, depthTest: false });
-    this._hbFg = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.14), this._hbFgMat);
+    this._hbFgMat = new THREE.MeshBasicMaterial({ color: 0x44dd22, depthTest: false });
+    this._hbFg = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.22), this._hbFgMat);
     this._hbFg.position.z = 0.005;
     this._hbGroup.add(this._hbFg);
 
@@ -290,7 +290,10 @@ export class CyCarrot {
 
       const ratio = this.health / this.maxHealth;
       this._hbFg.scale.x    = Math.max(0.001, ratio);
-      this._hbFg.position.x = -(1 - ratio) * 0.55;
+      this._hbFg.position.x = -(1 - ratio) * 0.60;
+      const r = Math.min(1, 2 * (1 - ratio));
+      const g = Math.min(1, 2 * ratio);
+      this._hbFgMat.color.setRGB(r, g, 0);
     }
   }
 }

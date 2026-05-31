@@ -84,9 +84,17 @@ export class MobileControls {
       border-color:#226644; font-size:22px;
     `);
 
+    // Dash — left of attack button
+    this._dashBtn = this._makeBtn('💨', `
+      right:116px; bottom:30px; width:68px; height:68px;
+      background:rgba(10,28,44,0.88);
+      border-color:#2a6a8a; font-size:26px;
+    `);
+
     document.body.appendChild(this._attackBtn);
     document.body.appendChild(this._invBtn);
     document.body.appendChild(this._mapBtn);
+    document.body.appendChild(this._dashBtn);
   }
 
   _makeBtn(icon, css) {
@@ -120,7 +128,7 @@ export class MobileControls {
 
   // ── Wire up game callbacks ────────────────────────────────────────────────
 
-  setCallbacks({ onAttack, onPotion, onInventory, onMap }) {
+  setCallbacks({ onAttack, onPotion, onDash, onInventory, onMap }) {
     const tap = (el, fn) => el.addEventListener('touchstart', e => {
       e.preventDefault();
       e.stopPropagation();
@@ -129,7 +137,8 @@ export class MobileControls {
 
     tap(this._attackBtn, onAttack);
     tap(this._invBtn,    onInventory);
-    if (onMap) tap(this._mapBtn, onMap);
+    if (onMap)  tap(this._mapBtn,  onMap);
+    if (onDash) tap(this._dashBtn, onDash);
     this._callbacks = { onPotion };
   }
 
