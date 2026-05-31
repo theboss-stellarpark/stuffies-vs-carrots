@@ -2,8 +2,9 @@ export class UI {
   constructor() {
     this.score = 0;
     this.player = null;
-    this.gameOver = false;
-    this.victory = false;
+    this.gameOver      = false;
+    this.victory       = false;
+    this.levelComplete = false;
     this._camera = null;
     this.onPotionUse = null;   // set by Game for mobile tap
   }
@@ -235,6 +236,22 @@ export class UI {
       el.style.opacity = '0';
     });
     setTimeout(() => el.remove(), 950);
+  }
+
+  showLevelComplete(currentLevel, onNext) {
+    if (this.levelComplete) return;
+    this.levelComplete = true;
+    this.victory = true;   // stop the game loop
+    this._overlayTitle.style.color = '#44ddff';
+    this._overlayTitle.textContent  = `LEVEL ${currentLevel} CLEAR`;
+    this._overlaySubtitle.textContent = `Score: ${this.score}  —  your gear carries over`;
+
+    // Swap button text and wire up next-level callback
+    const btn = this._overlay.querySelector('button');
+    btn.textContent = `Proceed to Level ${currentLevel + 1}`;
+    btn.onclick = onNext;
+
+    this._overlay.style.display = 'flex';
   }
 
   showGameOver() {

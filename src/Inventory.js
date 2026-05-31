@@ -1,4 +1,4 @@
-import { RARITY_COLOR, RARITY_BORDER, defaultWeapon, defaultArmor } from './Items.js';
+import { RARITY_COLOR, RARITY_BORDER, defaultWeapon, defaultArmor } from './Items.js?v=3';
 
 export class Inventory {
   constructor() {

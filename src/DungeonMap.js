@@ -20,19 +20,19 @@ export class DungeonMap {
     this._panel = document.createElement('div');
     this._panel.style.cssText = `
       position:fixed; top:50px; right:84px;
-      background:rgba(6,4,12,0.82);
-      border:1px solid #3a3050;
+      background:rgba(230,240,250,0.92);
+      border:1px solid #7aacc8;
       border-radius:7px;
       padding:7px 7px 6px 7px;
       display:none; flex-direction:column; gap:5px;
-      box-shadow:0 0 20px rgba(0,0,0,0.8), 0 0 8px rgba(60,30,90,0.3);
+      box-shadow:0 0 20px rgba(0,40,80,0.25), 0 0 8px rgba(100,180,220,0.3);
       pointer-events:none; z-index:50;
     `;
 
     // "MAP" label
     const label = document.createElement('div');
     label.style.cssText = `
-      color:#ffcc88; font-family:Georgia,serif;
+      color:#1a4060; font-family:Georgia,serif;
       font-size:10px; letter-spacing:3px; text-align:center;
     `;
     label.textContent = 'MAP';
@@ -41,7 +41,7 @@ export class DungeonMap {
     const legend = document.createElement('div');
     legend.style.cssText = `
       display:flex; gap:10px; justify-content:center;
-      font-family:monospace; font-size:9px; color:#555; letter-spacing:0px;
+      font-family:monospace; font-size:9px; color:#336; letter-spacing:0px;
     `;
     legend.innerHTML =
       '<span><span style="color:#88aaff">●</span> You</span>' +
@@ -52,7 +52,7 @@ export class DungeonMap {
     this._canvas.width  = pw;
     this._canvas.height = ph;
     this._canvas.style.cssText = `
-      display:block; border:1px solid #22182e; border-radius:2px;
+      display:block; border:1px solid #7aacc8; border-radius:2px;
     `;
 
     this._panel.appendChild(label);
@@ -70,7 +70,7 @@ export class DungeonMap {
     const T   = this._T;
     const ctx = this._ctx;
 
-    ctx.fillStyle = '#06050c';
+    ctx.fillStyle = '#c0cdd8';
     ctx.fillRect(0, 0, width * T, height * T);
 
     for (let gz = 0; gz < height; gz++) {
@@ -78,12 +78,12 @@ export class DungeonMap {
         if (grid[gz][gx] === 1) {
           // Floor — tiny per-tile variation for texture
           const v = ((gx * 7 + gz * 13) % 5);
-          const b = 0x42 + v * 2;
-          ctx.fillStyle = `rgb(${b + 14},${b + 10},${b + 6})`;
+          const b = 0xd8 + v * 2;
+          ctx.fillStyle = `rgb(${b},${b + 2},${b + 6})`;
           ctx.fillRect(gx * T, gz * T, T, T);
         } else if (this._adjFloor(gx, gz)) {
           // Wall bordering a floor tile
-          ctx.fillStyle = '#211730';
+          ctx.fillStyle = '#8aaabb';
           ctx.fillRect(gx * T, gz * T, T, T);
         }
         // else: void — stays black
@@ -145,15 +145,15 @@ export class DungeonMap {
     const pz = mz(playerPos.z);
 
     const g = ctx.createRadialGradient(px, pz, 0, px, pz, T * 3.2);
-    g.addColorStop(0, 'rgba(100,160,255,0.48)');
-    g.addColorStop(1, 'rgba(100,160,255,0)');
+    g.addColorStop(0, 'rgba(40,120,200,0.48)');
+    g.addColorStop(1, 'rgba(40,120,200,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(px, pz, T * 3.2, 0, Math.PI * 2);
     ctx.fill();
 
     // ── Player dot ──
-    ctx.fillStyle   = '#aaccff';
+    ctx.fillStyle   = '#2266aa';
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth   = 1;
     ctx.beginPath();
@@ -167,7 +167,7 @@ export class DungeonMap {
     const adx  = Math.sin(playerAngle) * aLen;
     const adz  = Math.cos(playerAngle) * aLen;
 
-    ctx.strokeStyle = '#ffffff';
+    ctx.strokeStyle = '#1a4a80';
     ctx.lineWidth   = 1.5;
     ctx.lineCap     = 'round';
     ctx.beginPath();

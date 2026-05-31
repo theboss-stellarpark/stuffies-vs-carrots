@@ -1,20 +1,27 @@
 import * as THREE from 'three';
-import { Dungeon } from './Dungeon.js';
-import { Player } from './Player.js';
-import { Enemy } from './Enemy.js';
-import { UI } from './UI.js';
-import { Inventory } from './Inventory.js';
-import { LootDrop } from './LootDrop.js';
-import { randomDrop } from './Items.js';
-import { MobileControls } from './MobileControls.js';
-import { DungeonMap } from './DungeonMap.js';
+import { Dungeon } from './Dungeon.js?v=3';
+import { Player } from './Player.js?v=3';
+import { Enemy } from './Enemy.js?v=3';
+import { UI } from './UI.js?v=3';
+import { Inventory } from './Inventory.js?v=3';
+import { LootDrop } from './LootDrop.js?v=3';
+import { randomDrop, randomDropL2, findItemById, SAVE_KEY } from './Items.js?v=3';
+import { MobileControls } from './MobileControls.js?v=3';
+import { DungeonMap } from './DungeonMap.js?v=3';
+import { CyCarrot } from './CyCarrot.js';
 
 const TILE = 3;
-const ENEMY_COUNT = 12;
-const LOOT_CHANCE = 0.5;
+
+const LEVELS = {
+  1: { enemies: 24, cyCarrots: 12, gridSize: 42 },
+  2: { enemies: 40, cyCarrots: 20, gridSize: 52 },
+};
+const LOOT_CHANCE = 0.10;
 
 export class Game {
-  constructor() {
+  constructor(level = 1, saveData = null) {
+    this._level    = level;
+    this._saveData = saveData;
     this._initRenderer();
     this._initScene();
     this._buildWorld();
@@ -26,10 +33,9 @@ export class Game {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.4;
+    this.renderer.shadowMap.enabled = false;
+    this.renderer.toneMapping = THREE.LinearToneMapping;
+    this.renderer.toneMappingExposure = 1.2;
     document.body.appendChild(this.renderer.domElement);
 
     window.addEventListener('resize', () => {
@@ -41,14 +47,14 @@ export class Game {
 
   _initScene() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x05040a);
-    this.scene.fog = new THREE.Fog(0x05040a, 20, 80);
+    this.scene.background = new THREE.Color(0x1a2a3a);
+    this.scene.fog = new THREE.Fog(0x1a2a3a, 20, 80);
 
     this.camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 200);
     this._camOffset = new THREE.Vector3(0, 19, 15);
 
-    this.scene.add(new THREE.AmbientLight(0x8899bb, 1.6));
-    this.scene.add(new THREE.HemisphereLight(0x334466, 0x553322, 1.2));
+    this.scene.add(new THREE.AmbientLight(0xddeeff, 2.8));
+    this.scene.add(new THREE.HemisphereLight(0xeef4ff, 0xbbd0e8, 1.4));
 
     this.clock = new THREE.Clock();
     this.particles = [];
@@ -57,18 +63,27 @@ export class Game {
   }
 
   _buildWorld() {
+    const cfg = LEVELS[this._level] || LEVELS[1];
+
     this.dungeon = new Dungeon(this.scene, TILE);
-    this.dungeon.generate(42, 42);
+    this.dungeon.generate(cfg.gridSize, cfg.gridSize);
 
     const startPos = this.dungeon.getStartPosition();
     this.player = new Player(this.scene, startPos);
 
-    const spawnPos = this.dungeon.getSpawnPositions(ENEMY_COUNT);
-    this.enemies = spawnPos.map(p => new Enemy(this.scene, p));
+    const spawnPos   = this.dungeon.getSpawnPositions(cfg.enemies);
+    const cySpawnPos = this.dungeon.getSpawnPositions(cfg.cyCarrots);
+    this.enemies = [
+      ...spawnPos.map(p => new Enemy(this.scene, p)),
+      ...cySpawnPos.map(p => new CyCarrot(this.scene, p)),
+    ];
     this._totalEnemies = this.enemies.length;
 
     this.ui = new UI();
     this.ui.init(this.player, this.camera);
+
+    // Level badge
+    this._addLevelBadge(this._level);
 
     // Inventory
     this.inventory = new Inventory();
@@ -77,11 +92,14 @@ export class Game {
     // Make potion slot tappable on mobile
     this.ui.onPotionUse = () => this._usePotion();
 
+    // Restore gear from save
+    if (this._saveData) this._restoreSave(this._saveData);
+
     // Dungeon map overlay
     this.dungeonMap = new DungeonMap(this.dungeon);
 
     // Mobile controls (no-op on desktop)
-    this.mobile = new MobileControls();
+    this.mobile = new MobileControls(this.renderer.domElement);
     if (this.mobile.enabled) {
       this.mobile.setCallbacks({
         onAttack:    () => this._playerAttack(),
@@ -94,6 +112,45 @@ export class Game {
     const targetCamPos = startPos.clone().add(this._camOffset);
     this.camera.position.copy(targetCamPos);
     this.camera.lookAt(startPos.clone().add(new THREE.Vector3(0, 1, 0)));
+  }
+
+  _addLevelBadge(level) {
+    const badge = document.createElement('div');
+    badge.style.cssText = `
+      position:fixed; top:18px; left:50%;
+      transform:translateX(calc(-50% + 120px));
+      color:#5aacc8; font-size:12px; letter-spacing:3px;
+      font-family:Georgia,serif;
+    `;
+    badge.textContent = `LEVEL ${level}`;
+    document.getElementById('hud').appendChild(badge);
+  }
+
+  _restoreSave(save) {
+    (save.bagIds || []).forEach(id => {
+      const item = findItemById(id);
+      if (item) this.inventory.addItem(item);
+    });
+    if (save.weaponId) {
+      const w = findItemById(save.weaponId);
+      if (w) { this.inventory.equippedWeapon = w; this.player.equip(w); }
+    }
+    if (save.armorId) {
+      const a = findItemById(save.armorId);
+      if (a) { this.inventory.equippedArmor = a; this.player.equip(a); }
+    }
+    if (save.score) this.ui.score = save.score;
+  }
+
+  _saveProgress(nextLevel) {
+    const save = {
+      level:    nextLevel,
+      score:    this.ui.score,
+      bagIds:   this.inventory.items.map(i => i.id),
+      weaponId: this.inventory.equippedWeapon?.id ?? null,
+      armorId:  this.inventory.equippedArmor?.id  ?? null,
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
   }
 
   _initInput() {
@@ -176,7 +233,7 @@ export class Game {
 
   _spawnLoot(position) {
     if (Math.random() > LOOT_CHANCE) return;
-    const item = randomDrop();
+    const item = this._level >= 2 ? randomDropL2() : randomDrop();
     const drop = new LootDrop(this.scene, position.clone(), item);
     this.lootDrops.push(drop);
   }
@@ -297,8 +354,17 @@ export class Game {
       this._updateParticles(delta);
       this._updateLoot(elapsed);
 
-      if (this.player.health <= 0) this.ui.showGameOver();
-      else if (this._totalEnemies > 0 && this.enemies.length === 0) this.ui.showVictory();
+      if (this.player.health <= 0) {
+        this.ui.showGameOver();
+      } else if (this._totalEnemies > 0 && this.enemies.length === 0) {
+        if (this._level < 2) {
+          this._saveProgress(this._level + 1);
+          this.ui.showLevelComplete(this._level, () => location.reload());
+        } else {
+          localStorage.removeItem(SAVE_KEY);
+          this.ui.showVictory();
+        }
+      }
     }
 
     this.dungeonMap.update(this.player.position, this.player.facingAngle, this.enemies);

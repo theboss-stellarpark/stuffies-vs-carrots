@@ -104,12 +104,11 @@ export class Dungeon {
 
     // ── Floor: dark metal checkerboard panels ──
     const floorGeo = new THREE.BoxGeometry(T, 0.20, T);
-    const floorMat = new THREE.MeshLambertMaterial({ color: 0x1a1c28, vertexColors: false });
+    const floorMat = new THREE.MeshLambertMaterial({ color: 0xe0e4ea, vertexColors: false });
     const floorMesh = new THREE.InstancedMesh(floorGeo, floorMat, floorPos.length);
-    floorMesh.receiveShadow = true;
 
-    const colA = new THREE.Color(0x1e2030);  // lighter panel
-    const colB = new THREE.Color(0x13141c);  // darker panel
+    const colA = new THREE.Color(0xe4e8ee);  // lighter panel
+    const colB = new THREE.Color(0xd4d8e0);  // darker panel
 
     floorPos.forEach(([wx, wz, gx, gz], i) => {
       dummy.position.set(wx, -0.10, wz);
@@ -139,7 +138,7 @@ export class Dungeon {
     }
 
     const stripGeo = new THREE.BoxGeometry(0.06, 0.12, T);
-    const stripMat = new THREE.MeshBasicMaterial({ color: 0x003366 });
+    const stripMat = new THREE.MeshBasicMaterial({ color: 0x7ab8d8 });
     const stripMesh = new THREE.InstancedMesh(stripGeo, stripMat, stripPositions.length);
     stripPositions.forEach(([wx, wz, dx, dz], i) => {
       dummy.position.set(wx, 0.01, wz);
@@ -164,10 +163,8 @@ export class Dungeon {
 
     // ── Walls: dark steel-blue panelled plates ──
     const wallGeo = new THREE.BoxGeometry(T, WALL_H, T);
-    const wallMat = new THREE.MeshLambertMaterial({ color: 0x1a2233 });
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0xe2e6ec });
     const wallMesh = new THREE.InstancedMesh(wallGeo, wallMat, wallPos.length);
-    wallMesh.castShadow  = true;
-    wallMesh.receiveShadow = true;
     wallPos.forEach(([wx, wz], i) => {
       dummy.position.set(wx, WALL_H / 2, wz);
       dummy.updateMatrix();
@@ -178,7 +175,7 @@ export class Dungeon {
 
     // ── Wall top trim strip (thin teal line at top of every wall) ──
     const trimGeo = new THREE.BoxGeometry(T, 0.10, T);
-    const trimMat = new THREE.MeshBasicMaterial({ color: 0x004455 });
+    const trimMat = new THREE.MeshBasicMaterial({ color: 0x5aacc8 });
     const trimMesh = new THREE.InstancedMesh(trimGeo, trimMat, wallPos.length);
     wallPos.forEach(([wx, wz], i) => {
       dummy.position.set(wx, WALL_H - 0.05, wz);
@@ -213,8 +210,8 @@ export class Dungeon {
       const isAlert = ri === this.rooms.length - 1; // last room = red alert
       const isTeal  = ri % 3 === 0;
 
-      const lightCol = isAlert ? 0xff2200 : (isTeal ? 0x00ddff : 0x3388ff);
-      const panelCol = isAlert ? 0xff3300 : (isTeal ? 0x00bbdd : 0x1155cc);
+      const lightCol = isAlert ? 0xff2200 : (isTeal ? 0xbbddff : 0xddeeff);
+      const panelCol = isAlert ? 0xff3300 : (isTeal ? 0x99ccee : 0xddeeff);
 
       const cx = room.cx * T;
       const cz = room.cy * T;
@@ -236,39 +233,15 @@ export class Dungeon {
       this.scene.add(halo);
       this._panels.push({ mesh: halo, mat: haloMat, phase: Math.random() * Math.PI * 2, type: isAlert ? 'alert' : 'halo' });
 
-      // Main point light
-      const light = new THREE.PointLight(lightCol, isAlert ? 6 : 5.5, T * 9, 1.1);
+      // One point light per room — wider radius so it covers the space
+      const light = new THREE.PointLight(lightCol, isAlert ? 5 : 4.5, T * 14, 1.0);
       light.position.set(cx, WALL_H - 1.0, cz);
       this.scene.add(light);
       this._lights.push({ light, phase: Math.random() * Math.PI * 2, type: isAlert ? 'alert' : 'main' });
-      this.torchLights.push({ light, phase: Math.random() * Math.PI * 2 }); // compat
-
-      // Secondary fill lights in larger rooms
-      if (room.w >= 7 && room.h >= 7) {
-        [
-          [room.x + 2, room.y + 2],
-          [room.x + room.w - 3, room.y + room.h - 3],
-        ].forEach(([gx, gz]) => {
-          const wx = gx * T, wz = gz * T;
-
-          // Small indicator disc on wall
-          const discGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.06, 10);
-          const discMat = new THREE.MeshBasicMaterial({ color: panelCol });
-          const disc    = new THREE.Mesh(discGeo, discMat);
-          disc.rotation.x = Math.PI / 2;
-          disc.position.set(wx, WALL_H * 0.52, wz);
-          this.scene.add(disc);
-          this._panels.push({ mesh: disc, mat: discMat, phase: Math.random() * Math.PI * 2, type: 'disc' });
-
-          const fill = new THREE.PointLight(lightCol, 2.5, T * 5, 1.4);
-          fill.position.set(wx, WALL_H * 0.7, wz);
-          this.scene.add(fill);
-          this._lights.push({ light: fill, phase: Math.random() * Math.PI * 2, type: 'fill' });
-        });
-      }
+      this.torchLights.push({ light, phase: Math.random() * Math.PI * 2 });
     });
 
-    // ── Corridor strip lights ──
+    // Corridor strip meshes only — no per-corridor PointLights
     for (let gz = 1; gz < this.height - 1; gz++) {
       for (let gx = 1; gx < this.width - 1; gx++) {
         if (this.grid[gz][gx] !== FLOOR) continue;
@@ -279,15 +252,9 @@ export class Dungeon {
 
         const isH = hNeighbors === 2;
         const stripGeo = new THREE.BoxGeometry(isH ? T * 0.7 : 0.10, 0.06, isH ? 0.10 : T * 0.7);
-        const stripMat = new THREE.MeshBasicMaterial({ color: 0x004466 });
-        const strip    = new THREE.Mesh(stripGeo, stripMat);
+        const strip = new THREE.Mesh(stripGeo, new THREE.MeshBasicMaterial({ color: 0x88c0dc }));
         strip.position.set(gx * this.T, WALL_H - 0.06, gz * this.T);
         this.scene.add(strip);
-
-        const corridorLight = new THREE.PointLight(0x0077aa, 2.8, this.T * 5, 1.4);
-        corridorLight.position.set(gx * this.T, WALL_H * 0.6, gz * this.T);
-        this.scene.add(corridorLight);
-        this._lights.push({ light: corridorLight, phase: Math.random() * Math.PI * 2, type: 'corridor' });
       }
     }
   }
@@ -300,7 +267,7 @@ export class Dungeon {
     this.rooms.forEach((room, ri) => {
       // ── Horizontal conduit pipe along the inside top of left wall ──
       const pipeLen = (room.h - 2) * T;
-      const pipeMat = new THREE.MeshLambertMaterial({ color: 0x2a3545 });
+      const pipeMat = new THREE.MeshLambertMaterial({ color: 0x9aaabb });
       const pipe    = new THREE.Mesh(
         new THREE.CylinderGeometry(0.08, 0.08, pipeLen, 7), pipeMat
       );
@@ -319,7 +286,7 @@ export class Dungeon {
       // Panel body
       const consoleBody = new THREE.Mesh(
         new THREE.BoxGeometry(0.14, T * 0.70, T * 0.85),
-        new THREE.MeshLambertMaterial({ color: 0x0c1420 })
+        new THREE.MeshLambertMaterial({ color: 0xc8d0d8 })
       );
       consoleBody.position.set(wallX, WALL_H * 0.48, wallZ);
       this.scene.add(consoleBody);
@@ -327,7 +294,7 @@ export class Dungeon {
       // Screen (darker inset)
       const screen = new THREE.Mesh(
         new THREE.BoxGeometry(0.08, T * 0.40, T * 0.52),
-        new THREE.MeshBasicMaterial({ color: 0x001833 })
+        new THREE.MeshBasicMaterial({ color: 0x2255aa })
       );
       screen.position.set(wallX + 0.11, WALL_H * 0.50, wallZ);
       this.scene.add(screen);
@@ -346,7 +313,7 @@ export class Dungeon {
       // ── Vent grille on bottom of another wall ──
       if (room.h >= 7) {
         const ventW = T * 0.6;
-        const ventMat = new THREE.MeshLambertMaterial({ color: 0x111822 });
+        const ventMat = new THREE.MeshLambertMaterial({ color: 0xaab4bc });
         for (let vi = 0; vi < 4; vi++) {
           const bar = new THREE.Mesh(
             new THREE.BoxGeometry(ventW, 0.06, 0.04), ventMat
@@ -354,10 +321,6 @@ export class Dungeon {
           bar.position.set(room.cx * T, 0.18 + vi * 0.18, room.y * T);
           this.scene.add(bar);
         }
-        // Vent glow
-        const ventGlow = new THREE.PointLight(0x0033aa, 0.8, T * 2);
-        ventGlow.position.set(room.cx * T, 0.3, room.y * T);
-        this.scene.add(ventGlow);
       }
     });
 

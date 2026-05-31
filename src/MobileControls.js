@@ -3,7 +3,7 @@
 // Joystick appears at the first touch point on the left 55% of the screen.
 
 export class MobileControls {
-  constructor() {
+  constructor(canvas) {
     this.movement = { x: 0, y: 0 };
     this.enabled  = false;
 
@@ -11,6 +11,7 @@ export class MobileControls {
     this._origin    = { x: 0, y: 0 };
     this._radius    = 68;          // outer ring radius in CSS pixels
     this._callbacks = {};
+    this._canvas    = canvas;      // Three.js renderer canvas passed in explicitly
 
     if (!this._isTouch()) return;
     this.enabled = true;
@@ -135,7 +136,7 @@ export class MobileControls {
   // ── Canvas touch binding ──────────────────────────────────────────────────
 
   _bindCanvas() {
-    const canvas = document.querySelector('canvas');
+    const canvas = this._canvas;
 
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();

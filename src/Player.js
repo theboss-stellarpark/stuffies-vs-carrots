@@ -177,10 +177,6 @@ export class Player {
     this._weaponGroup = this._buildWeaponMesh({ shape: 'sword', color: 0xd0d0ee, guardColor: 0xaa8833 });
     this._rightArmPivot.add(this._weaponGroup);
 
-    // ── Soft purple glow ──
-    this._light = new THREE.PointLight(0x9966cc, 2.0, 10, 1.5);
-    this._light.position.y = 1.5;
-    this.group.add(this._light);
 
     this.group.position.copy(position);
     scene.add(this.group);
@@ -322,6 +318,77 @@ export class Player {
         break;
       }
 
+      case 'nano_suit': {
+        // Sleek form-fitting shell with glowing cyan seams
+        const shell = mk(new THREE.SphereGeometry(0.53, 12, 9), c);
+        shell.scale.set(0.80, 1.28, 0.82);
+        shell.position.y = 1.08;
+        body.add(shell);
+        const seamV = mk(new THREE.BoxGeometry(0.05, 0.90, 0.05), 0x00ccff);
+        seamV.position.set(0, 1.08, 0.50);
+        body.add(seamV);
+        [-0.22, 0.22].forEach(x => {
+          const seamH = mk(new THREE.BoxGeometry(0.04, 0.70, 0.04), 0x0088ee);
+          seamH.position.set(x, 1.08, 0.49);
+          body.add(seamH);
+        });
+        const sGeo = new THREE.SphereGeometry(0.18, 8, 6);
+        padL = mk(sGeo, c); padL.scale.set(1.1, 0.70, 0.90);
+        padR = mk(sGeo, c); padR.scale.set(1.1, 0.70, 0.90);
+        break;
+      }
+
+      case 'cryo_vest': {
+        const chest = mk(new THREE.BoxGeometry(0.60, 0.68, 0.10), c);
+        chest.position.set(0, 1.08, 0.44);
+        body.add(chest);
+        [-0.17, 0.17].forEach(x => {
+          const facet = mk(new THREE.BoxGeometry(0.20, 0.50, 0.07), 0xcceeff);
+          facet.position.set(x, 1.10, 0.48);
+          facet.rotation.z = x > 0 ? -0.12 : 0.12;
+          body.add(facet);
+        });
+        // Hex shoulder pads
+        padL = mk(new THREE.CylinderGeometry(0.16, 0.18, 0.10, 6), c);
+        padL.rotation.y = Math.PI / 6;
+        padR = mk(new THREE.CylinderGeometry(0.16, 0.18, 0.10, 6), c);
+        padR.rotation.y = Math.PI / 6;
+        break;
+      }
+
+      case 'combat_chassis': {
+        const front = mk(new THREE.BoxGeometry(0.62, 0.72, 0.10), c);
+        front.position.set(0, 1.08, 0.44);
+        body.add(front);
+        [-0.27, 0.27].forEach(x => {
+          const side = mk(new THREE.BoxGeometry(0.10, 0.62, 0.08), 0x334455);
+          side.position.set(x, 1.10, 0.40);
+          side.rotation.y = x > 0 ? -0.4 : 0.4;
+          body.add(side);
+        });
+        const belt = mk(new THREE.BoxGeometry(0.70, 0.11, 0.44), 0x223344);
+        belt.position.y = 0.70;
+        body.add(belt);
+        padL = mk(new THREE.BoxGeometry(0.34, 0.18, 0.26), c);
+        padR = mk(new THREE.BoxGeometry(0.34, 0.18, 0.26), c);
+        break;
+      }
+
+      case 'reflector_shield': {
+        const shield = mk(new THREE.BoxGeometry(0.66, 0.82, 0.10), c);
+        shield.position.set(0, 1.10, 0.43);
+        body.add(shield);
+        const inner = mk(new THREE.BoxGeometry(0.42, 0.58, 0.06), 0xeeddbb);
+        inner.position.set(0, 1.10, 0.49);
+        body.add(inner);
+        const centre = mk(new THREE.BoxGeometry(0.18, 0.26, 0.06), c);
+        centre.position.set(0, 1.10, 0.52);
+        body.add(centre);
+        padL = mk(new THREE.BoxGeometry(0.42, 0.14, 0.32), c);
+        padR = mk(new THREE.BoxGeometry(0.42, 0.14, 0.32), c);
+        break;
+      }
+
       case 'bone_armor': {
         // Horizontal rib bars across chest
         for (let i = 0; i < 5; i++) {
@@ -397,6 +464,65 @@ export class Player {
         group.add(handle, head, spike1, spike2);
         break;
       }
+      case 'plasma': {
+        const blade = b(0.06, 1.30, 0.04);
+        blade.position.y = -0.65;
+        const guard = b(0.40, 0.08, 0.08, gmat);
+        // Glowing edge strip
+        const edge = new THREE.Mesh(
+          new THREE.BoxGeometry(0.03, 1.30, 0.03),
+          new THREE.MeshBasicMaterial({ color: item.guardColor || 0x00aaff })
+        );
+        edge.position.set(0.048, -0.65, 0);
+        group.add(blade, guard, edge);
+        break;
+      }
+
+      case 'lance': {
+        const shaft = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.055, 0.04, 2.20, 6),
+          gmat
+        );
+        shaft.position.y = -1.10;
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.46, 6), mat);
+        tip.position.y = -0.02;
+        group.add(shaft, tip);
+        break;
+      }
+
+      case 'gauntlet': {
+        const plate = b(0.38, 0.24, 0.22);
+        plate.position.set(0, -0.12, 0);
+        [-0.12, 0, 0.12].forEach(x => {
+          const bump = new THREE.Mesh(new THREE.SphereGeometry(0.09, 7, 6), mat);
+          bump.position.set(x, -0.04, 0.12);
+          group.add(bump);
+        });
+        const wrist = b(0.28, 0.32, 0.20, gmat);
+        wrist.position.set(0, -0.44, 0);
+        group.add(plate, wrist);
+        break;
+      }
+
+      case 'cannon': {
+        const barrel = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.12, 0.14, 0.70, 8),
+          mat
+        );
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, -0.35, -0.14);
+        const body2 = b(0.28, 0.38, 0.26, gmat);
+        body2.position.set(0, -0.30, 0.06);
+        const muzzle = new THREE.Mesh(
+          new THREE.TorusGeometry(0.12, 0.035, 6, 12),
+          mat
+        );
+        muzzle.rotation.x = Math.PI / 2;
+        muzzle.position.set(0, -0.35, -0.52);
+        group.add(barrel, body2, muzzle);
+        break;
+      }
+
       default: { // sword
         const blade = b(0.08, 1.12, 0.06);
         blade.position.y = -0.56;
