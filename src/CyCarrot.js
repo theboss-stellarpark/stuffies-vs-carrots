@@ -207,8 +207,10 @@ export class CyCarrot {
         return false;
       }
 
-      // Player hit
-      if (o.mesh.position.distanceTo(player.mesh.position) < 0.85) {
+      // Player hit — use XZ-only distance since orbs travel horizontally at Y≈1.1
+      const dx = o.mesh.position.x - player.mesh.position.x;
+      const dz = o.mesh.position.z - player.mesh.position.z;
+      if (Math.sqrt(dx * dx + dz * dz) < 0.85) {
         player.takeDamage(ORB_DAMAGE);
         this._scene.remove(o.mesh);
         return false;

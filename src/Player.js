@@ -22,7 +22,18 @@ export class Player {
     this._dashTimer        = 0;
     this._dashDir          = new THREE.Vector3();
 
-    this._character === 'slothy' ? this._buildSlothy(scene, position) : this._buildStuffie(scene, position);
+    this.frozen          = false;
+    this._frozenTimer    = 0;
+    this._iceCube        = null;
+    this._knockbackVel   = new THREE.Vector3();
+
+    this.confused        = false;
+    this._confusedTimer  = 0;
+    this._confusedAura   = null;
+
+    if      (this._character === 'slothy') this._buildSlothy(scene, position);
+    else if (this._character === 'minty')  this._buildMinty(scene, position);
+    else                                   this._buildStuffie(scene, position);
   }
 
   _buildSlothy(scene, position) {
@@ -136,6 +147,130 @@ export class Player {
 
     this._armorBody = null; this._armorPadL = null; this._armorPadR = null;
     this._materials = [{ mat: blue, origColor: blue.color.clone() }];
+    this.group.position.copy(position);
+    scene.add(this.group);
+    this.mesh = this.group;
+  }
+
+  _buildMinty(scene, position) {
+    this.group = new THREE.Group();
+
+    const mint     = new THREE.MeshLambertMaterial({ color: 0x55ddbb });
+    const hoodie   = new THREE.MeshLambertMaterial({ color: 0xee2277 });
+    const hoodDark = new THREE.MeshLambertMaterial({ color: 0xcc1166 });
+    const innerEar = new THREE.MeshLambertMaterial({ color: 0xffaad4 });
+    const dark     = new THREE.MeshLambertMaterial({ color: 0x221111 });
+    const shine    = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+    const s = (geo, mat) => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; return m; };
+
+    // Pink hoodie body — slimmer
+    const body = s(new THREE.SphereGeometry(0.52, 12, 10), hoodie);
+    body.scale.set(0.72, 1.10, 0.76);
+    body.position.y = 1.05;
+    this.group.add(body);
+
+    // Teal fur peeking out below hoodie
+    const furBase = s(new THREE.SphereGeometry(0.40, 10, 8), mint);
+    furBase.scale.set(0.78, 0.48, 0.82);
+    furBase.position.set(0, 0.64, 0);
+    this.group.add(furBase);
+
+    // Hoodie pocket
+    const pocket = s(new THREE.BoxGeometry(0.24, 0.14, 0.04), hoodDark);
+    pocket.position.set(0, 0.88, 0.40);
+    this.group.add(pocket);
+
+    // Head (teal)
+    const head = s(new THREE.SphereGeometry(0.40, 12, 10), mint);
+    head.position.y = 1.84;
+    this.group.add(head);
+
+    // Round bear ears (teal + pink inner)
+    [-0.36, 0.36].forEach(ex => {
+      const ear = s(new THREE.SphereGeometry(0.19, 10, 8), mint);
+      ear.position.set(ex, 2.22, 0.04);
+      this.group.add(ear);
+      const inner = s(new THREE.SphereGeometry(0.11, 8, 6), innerEar);
+      inner.position.set(ex, 2.23, 0.11);
+      this.group.add(inner);
+    });
+
+    // Eyes with shine
+    [-0.17, 0.17].forEach((ex, i) => {
+      const eye = s(new THREE.SphereGeometry(0.082, 8, 7), dark);
+      eye.position.set(ex, 1.92, 0.40);
+      this.group.add(eye);
+      const eyeShine = s(new THREE.SphereGeometry(0.030, 6, 5), shine);
+      eyeShine.position.set(ex + (i === 0 ? 0.03 : -0.03), 1.94, 0.46);
+      this.group.add(eyeShine);
+      // Eyelashes
+      [-0.06, 0, 0.06].forEach(lx => {
+        const lash = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.065, 0.018), dark);
+        lash.position.set(ex + lx, 1.98, 0.39);
+        lash.rotation.z = lx * 0.9;
+        this.group.add(lash);
+      });
+    });
+
+    // Nose
+    const nose = s(new THREE.SphereGeometry(0.065, 7, 6), dark);
+    nose.scale.set(1.3, 0.9, 0.75);
+    nose.position.set(0, 1.78, 0.45);
+    this.group.add(nose);
+
+    // Smile
+    [-0.10, 0.10].forEach((sx, i) => {
+      const piece = s(new THREE.BoxGeometry(0.12, 0.034, 0.025), dark);
+      piece.position.set(sx, 1.67, 0.45);
+      piece.rotation.z = (i === 0 ? 1 : -1) * 0.44;
+      this.group.add(piece);
+    });
+
+    // Arms — hoodie sleeves + teal paws
+    this._leftArmPivot = new THREE.Group();
+    this._leftArmPivot.position.set(-0.40, 1.38, 0);
+    const lSleeve = s(new THREE.CylinderGeometry(0.10, 0.09, 0.52, 8), hoodie);
+    lSleeve.position.set(0, -0.26, 0); lSleeve.rotation.z = 0.20;
+    this._leftArmPivot.add(lSleeve);
+    const lPaw = s(new THREE.SphereGeometry(0.11, 8, 6), mint);
+    lPaw.position.set(0.11, -0.56, 0);
+    this._leftArmPivot.add(lPaw);
+    this.group.add(this._leftArmPivot);
+
+    this._rightArmPivot = new THREE.Group();
+    this._rightArmPivot.position.set(0.40, 1.38, 0);
+    const rSleeve = s(new THREE.CylinderGeometry(0.10, 0.09, 0.52, 8), hoodie);
+    rSleeve.position.set(0, -0.26, 0); rSleeve.rotation.z = -0.20;
+    this._rightArmPivot.add(rSleeve);
+    const rPaw = s(new THREE.SphereGeometry(0.11, 8, 6), mint);
+    rPaw.position.set(-0.11, -0.56, 0);
+    this._rightArmPivot.add(rPaw);
+    this.group.add(this._rightArmPivot);
+
+    this._weaponGroup = this._buildWeaponMesh({ shape: 'sword', color: 0xd0d0ee, guardColor: 0xaa8833 });
+    this._rightArmPivot.add(this._weaponGroup);
+
+    // Legs (teal)
+    const legGeo = new THREE.BoxGeometry(0.30, 0.52, 0.30);
+    this._leftLeg  = s(legGeo, mint); this._leftLeg.position.set(-0.22, 0.44, 0);
+    this._rightLeg = s(legGeo, mint); this._rightLeg.position.set( 0.22, 0.44, 0);
+    this.group.add(this._leftLeg);
+    this.group.add(this._rightLeg);
+
+    // Feet
+    [-0.22, 0.22].forEach(fx => {
+      const foot = s(new THREE.SphereGeometry(0.14, 8, 6), mint);
+      foot.scale.set(1.0, 0.65, 1.30);
+      foot.position.set(fx, 0.18, 0.04);
+      this.group.add(foot);
+    });
+
+    this._armorBody = null; this._armorPadL = null; this._armorPadR = null;
+    this._materials = [
+      { mat: mint,   origColor: mint.color.clone() },
+      { mat: hoodie, origColor: hoodie.color.clone() },
+    ];
     this.group.position.copy(position);
     scene.add(this.group);
     this.mesh = this.group;
@@ -755,6 +890,43 @@ export class Player {
     this.facingAngle       = Math.atan2(dir.x, dir.z);
   }
 
+  freeze(duration) {
+    if (this.dead) return;
+    this.frozen       = true;
+    this._frozenTimer = duration;
+    if (!this._iceCube) {
+      const geo     = new THREE.BoxGeometry(1.5, 2.4, 1.5);
+      const mat     = new THREE.MeshBasicMaterial({ color: 0x99ddff, transparent: true, opacity: 0.55 });
+      this._iceCube = new THREE.Mesh(geo, mat);
+      this._iceCube.position.set(0, 1.2, 0);
+
+      const wireMat  = new THREE.MeshBasicMaterial({ color: 0xccf0ff, wireframe: true });
+      const wireGeo  = new THREE.BoxGeometry(1.54, 2.44, 1.54);
+      const wire     = new THREE.Mesh(wireGeo, wireMat);
+      wire.position.set(0, 1.2, 0);
+
+      this.group.add(this._iceCube);
+      this.group.add(wire);
+      this._iceCubeWire = wire;
+    }
+  }
+
+  confuse(duration) {
+    if (this.dead) return;
+    this.confused       = true;
+    this._confusedTimer = duration;
+    if (!this._confusedAura) {
+      const mat          = new THREE.MeshBasicMaterial({ color: 0xcc44ff, transparent: true, opacity: 0.28 });
+      this._confusedAura = new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 10), mat);
+      this._confusedAura.position.set(0, 1.1, 0);
+      this.group.add(this._confusedAura);
+    }
+  }
+
+  knockback(dirX, dirZ, force = 5) {
+    this._knockbackVel.set(dirX * force, 0, dirZ * force);
+  }
+
   takeDamage(amount) {
     if (this.invincible || this._dashActive || this.dead) return;
     const reduced = Math.max(1, amount - this.defense);
@@ -767,6 +939,35 @@ export class Player {
   // touchMove: optional {x, y} from MobileControls (-1..1 each axis)
   update(delta, keys, camera, dungeon, touchMove = null) {
     if (this.dead) return;
+
+    // Confusion timer — runs even while frozen
+    if (this.confused) {
+      this._confusedTimer -= delta;
+      if (this._confusedAura)
+        this._confusedAura.scale.setScalar(1 + Math.sin(performance.now() * 0.006) * 0.18);
+      if (this._confusedTimer <= 0) {
+        this.confused = false;
+        if (this._confusedAura) { this.group.remove(this._confusedAura); this._confusedAura = null; }
+      }
+    }
+
+    // Frozen: skip input movement but allow knockback to slide the player
+    if (this.frozen) {
+      this._frozenTimer -= delta;
+      if (this._knockbackVel.lengthSq() > 0.01) {
+        const nx = this.group.position.x + this._knockbackVel.x * delta;
+        const nz = this.group.position.z + this._knockbackVel.z * delta;
+        if (dungeon.isWalkable(nx, this.group.position.z)) this.group.position.x = nx;
+        if (dungeon.isWalkable(this.group.position.x, nz)) this.group.position.z = nz;
+        this._knockbackVel.multiplyScalar(Math.max(0, 1 - delta * 9));
+      }
+      if (this._frozenTimer <= 0) {
+        this.frozen = false;
+        if (this._iceCube)     { this.group.remove(this._iceCube);     this._iceCube     = null; }
+        if (this._iceCubeWire) { this.group.remove(this._iceCubeWire); this._iceCubeWire = null; }
+      }
+      return;
+    }
 
     // Dash cooldown tick
     if (this._dashCooldownLeft > 0)
@@ -797,18 +998,19 @@ export class Player {
     forward.normalize();
     const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0));
 
+    const inv  = this.confused ? -1 : 1;
     const move = new THREE.Vector3();
-    if (keys['KeyW'] || keys['ArrowUp'])    move.add(forward);
-    if (keys['KeyS'] || keys['ArrowDown'])  move.sub(forward);
-    if (keys['KeyD'] || keys['ArrowRight']) move.add(right);
-    if (keys['KeyA'] || keys['ArrowLeft'])  move.sub(right);
+    if (keys['KeyW'] || keys['ArrowUp'])    move.addScaledVector(forward,  inv);
+    if (keys['KeyS'] || keys['ArrowDown'])  move.addScaledVector(forward, -inv);
+    if (keys['KeyD'] || keys['ArrowRight']) move.addScaledVector(right,    inv);
+    if (keys['KeyA'] || keys['ArrowLeft'])  move.addScaledVector(right,   -inv);
 
     // Joystick: screen-right → world-right, screen-up (-y) → world-forward
     if (touchMove) {
-      const tx = touchMove.x, ty = touchMove.y;
+      const tx = touchMove.x * inv, ty = touchMove.y * inv;
       if (Math.abs(tx) > 0.08 || Math.abs(ty) > 0.08) {
         move.addScaledVector(right,    tx);
-        move.addScaledVector(forward, -ty);   // screen +Y is down = world backward
+        move.addScaledVector(forward, -ty);
       }
     }
 

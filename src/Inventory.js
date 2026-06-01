@@ -3,7 +3,7 @@ import { RARITY_COLOR, RARITY_BORDER, defaultWeapon, defaultArmor, SELL_VALUE, g
 export class Inventory {
   constructor() {
     this.items = [];
-    this.maxSize = 8;
+    this.maxSize = 16;
     this.equippedWeapon = null;
     this.equippedArmor  = null;
     this._visible = false;
@@ -21,7 +21,7 @@ export class Inventory {
     this._panel.style.cssText = `
       position:fixed; top:50%; left:50%;
       transform:translate(-50%,-50%);
-      width:520px;
+      width:680px;
       background:rgba(10,7,16,0.97);
       border:2px solid #3a3050;
       border-radius:12px;
@@ -85,10 +85,10 @@ export class Inventory {
     // Right: bag grid
     const bagCol = document.createElement('div');
     bagCol.style.cssText = 'flex:1; min-width:0;';
-    this._bagLabel = this._addLabel(bagCol, 'BACKPACK  0/8');
+    this._bagLabel = this._addLabel(bagCol, 'BACKPACK  0/16');
 
     this._grid = document.createElement('div');
-    this._grid.style.cssText = 'display:grid; grid-template-columns:1fr 1fr; gap:8px;';
+    this._grid.style.cssText = 'display:grid; grid-template-columns:repeat(4,1fr); gap:8px;';
     bagCol.appendChild(this._grid);
 
     body.appendChild(equipCol);
@@ -187,7 +187,7 @@ export class Inventory {
     }
 
     // Sell button
-    const sellVal = SELL_VALUE[item.rarity] || 10;
+    const sellVal = item.sellValue || SELL_VALUE[item.rarity] || 10;
     const sellBtn = document.createElement('button');
     sellBtn.textContent = `Sell 🪙${sellVal}`;
     sellBtn.style.cssText = `

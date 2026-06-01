@@ -1,7 +1,8 @@
 export const SAVE_KEY   = 'stuffies_save';
 export const META_KEY   = 'stuffies_meta';
-export const SLOTHY_COST = 150;
-export const SELL_VALUE  = { common: 10, rare: 30, epic: 75 };
+export const SLOTHY_COST = 250;
+export const MINTY_COST  = 500;
+export const SELL_VALUE  = { common: 10, rare: 30, epic: 75, legendary: 200 };
 
 export function getMeta() {
   try { return { ...defaultMeta(), ...JSON.parse(localStorage.getItem(META_KEY)) }; }
@@ -9,7 +10,7 @@ export function getMeta() {
 }
 export function saveMeta(meta) { localStorage.setItem(META_KEY, JSON.stringify(meta)); }
 function defaultMeta() {
-  return { coins: 0, unlockedChars: ['stuffy'], selectedChar: 'stuffy' };
+  return { coins: 0, unlockedChars: ['stuffy'], selectedChar: 'stuffy', clearedLevels: [], unlockedDifficulties: [1] };
 }
 
 export const WEAPONS = [
@@ -125,20 +126,54 @@ export const ARMORS_L2 = [
   },
 ];
 
+const _ALL_BASE = () => [...WEAPONS, ...ARMORS, ...WEAPONS_L2, ...ARMORS_L2, WIZARD_WAND];
+
+// Returns a stat-boosted copy with a difficulty-suffixed id so saves round-trip correctly.
+export function scaleItem(item, difficulty) {
+  if (difficulty <= 1) return item;
+  const dmgAdd    = difficulty === 2 ? 15 : 30;
+  const defAdd    = difficulty === 2 ? 3  : 6;
+  const sellMult  = difficulty === 2 ? 2  : 3;
+  const scaled = { ...item, id: `${item.id}_d${difficulty}` };
+  if (item.type === 'weapon') {
+    scaled.damage = [item.damage[0] + dmgAdd, item.damage[1] + dmgAdd];
+  } else {
+    scaled.defense = item.defense + defAdd;
+  }
+  const baseSell = SELL_VALUE[item.rarity] || 10;
+  scaled.sellValue = baseSell * sellMult;
+  return scaled;
+}
+
 export function findItemById(id) {
-  return [...WEAPONS, ...ARMORS, ...WEAPONS_L2, ...ARMORS_L2].find(i => i.id === id) || null;
+  // Handle scaled variants (e.g. "wizards_wand_d2")
+  const m = id && id.match(/^(.+)_d([23])$/);
+  if (m) {
+    const base = _ALL_BASE().find(i => i.id === m[1]);
+    return base ? scaleItem(base, parseInt(m[2])) : null;
+  }
+  return _ALL_BASE().find(i => i.id === id) || null;
 }
 
 export const RARITY_COLOR = {
-  common: '#aaaaaa',
-  rare:   '#4499ff',
-  epic:   '#cc44ff',
+  common:    '#aaaaaa',
+  rare:      '#4499ff',
+  epic:      '#cc44ff',
+  legendary: '#ffdd00',
 };
 
 export const RARITY_BORDER = {
-  common: '#555555',
-  rare:   '#2266bb',
-  epic:   '#882299',
+  common:    '#555555',
+  rare:      '#2266bb',
+  epic:      '#882299',
+  legendary: '#bb8800',
+};
+
+export const WIZARD_WAND = {
+  id: 'wizards_wand', name: "Wizard's Wand", type: 'weapon', rarity: 'legendary',
+  damage: [100, 110], cooldown: 0.34, range: 5.0, arc: Math.PI * 0.50,
+  color: 0xffdd00, guardColor: 0xffaa00, shape: 'dagger', icon: '🪄',
+  desc: 'Crackling with ancient magic. Belonged to the Wizard Carrot.',
 };
 
 const _DEFAULT_WEAPON = {
@@ -168,4 +203,12 @@ export function randomDropL2() {
   const rarity = _rarityRoll();
   const pool = [...WEAPONS_L2, ...ARMORS_L2].filter(i => i.rarity === rarity);
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// Difficulty 3 (Apocalypse): same item pool as L2 but heavily weighted toward rare/epic
+export function randomDropHard() {
+  const r = Math.random();
+  const rarity = r < 0.25 ? 'common' : r < 0.62 ? 'rare' : 'epic';
+  const pool = [...WEAPONS_L2, ...ARMORS_L2].filter(i => i.rarity === rarity);
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : randomDropL2();
 }

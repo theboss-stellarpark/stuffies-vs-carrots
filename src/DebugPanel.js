@@ -1,13 +1,15 @@
-import { WEAPONS, ARMORS, WEAPONS_L2, ARMORS_L2, RARITY_COLOR, RARITY_BORDER, getMeta, saveMeta } from './Items.js?v=3';
+import { WEAPONS, ARMORS, WEAPONS_L2, ARMORS_L2, WIZARD_WAND, RARITY_COLOR, RARITY_BORDER, scaleItem, getMeta, saveMeta } from './Items.js?v=3';
 
 // Split so it's not sitting as one obvious literal in the source
 const _PW = ['flu', 'ffy', '717'].join('');
 
 export class DebugPanel {
-  constructor(onEquip) {
-    this._onEquip  = onEquip;
-    this._unlocked = false;
-    this._visible  = false;
+  constructor(onEquip, onSelectLevel) {
+    this._onEquip          = onEquip;
+    this._onSelectLevel    = onSelectLevel;
+    this._unlocked         = false;
+    this._visible          = false;
+    this._debugDifficulty  = 1;
     this._buildPrompt();
     this._buildPanel();
   }
@@ -59,6 +61,13 @@ export class DebugPanel {
 
     const tryUnlock = () => {
       if (this._pwInput.value === _PW) {
+        // Unlock all characters when debug access is granted
+        const meta = getMeta();
+        ['slothy', 'minty'].forEach(id => {
+          if (!meta.unlockedChars.includes(id)) meta.unlockedChars.push(id);
+        });
+        saveMeta(meta);
+
         this._unlocked = true;
         this._hidePrompt();
         this.show();
@@ -136,7 +145,30 @@ export class DebugPanel {
       width:28px; height:28px; cursor:pointer; border-radius:4px; font-size:13px;
     `;
     closeBtn.onclick = () => this.hide();
+
+    const resetBtn = document.createElement('button');
+    resetBtn.textContent = '🗑 Clear Debug Gear';
+    resetBtn.style.cssText = `
+      background:#1a0808; border:1px solid #662222; color:#aa4444;
+      border-radius:4px; padding:4px 10px; font-size:11px;
+      cursor:pointer; font-family:monospace; letter-spacing:1px;
+    `;
+    resetBtn.onmouseenter = () => resetBtn.style.background = '#2a0808';
+    resetBtn.onmouseleave = () => resetBtn.style.background = '#1a0808';
+    resetBtn.onclick = () => {
+      if (!confirm('Clear debug gear? Equipped items, bag, and unlocked difficulties will be reset to default. Coins, cleared levels, and character unlocks are kept.')) return;
+      const meta = getMeta();
+      meta.unlockedDifficulties = [1];
+      saveMeta(meta);
+      localStorage.removeItem('stuffies_save');
+      sessionStorage.removeItem('debug_char');
+      sessionStorage.removeItem('debug_level');
+      sessionStorage.removeItem('debug_difficulty');
+      location.reload();
+    };
+
     titleBar.appendChild(titleEl);
+    titleBar.appendChild(resetBtn);
     titleBar.appendChild(closeBtn);
     inner.appendChild(titleBar);
 
@@ -155,12 +187,13 @@ export class DebugPanel {
     const chars = [
       { id: 'stuffy', label: 'Fluffy', icon: '👽', desc: 'Alien warrior' },
       { id: 'slothy', label: 'Slothy', icon: '🦥', desc: '+10% attack'  },
+      { id: 'minty',  label: 'Minty',  icon: '🐻', desc: '+10% spd / +5% atk' },
     ];
 
     const refreshCards = () => {
-      const meta = getMeta();
+      const pending = sessionStorage.getItem('debug_char') || getMeta().selectedChar;
       charRow.querySelectorAll('[data-char]').forEach(c => {
-        const sel = c.dataset.char === meta.selectedChar;
+        const sel = c.dataset.char === pending;
         c.style.borderColor = sel ? '#ff6655' : '#442222';
         c.style.background  = sel ? 'rgba(80,20,20,0.6)' : '#0d0a14';
       });
@@ -182,11 +215,7 @@ export class DebugPanel {
       card.onmouseenter = () => { card.style.borderColor = '#ff6655'; card.style.background = '#1a0a0a'; };
       card.onmouseleave = () => refreshCards();
       card.onclick = () => {
-        const meta = getMeta();
-        meta.selectedChar = ch.id;
-        // Auto-unlock in debug mode
-        if (!meta.unlockedChars.includes(ch.id)) meta.unlockedChars.push(ch.id);
-        saveMeta(meta);
+        sessionStorage.setItem('debug_char', ch.id);
         refreshCards();
         reloadNote.style.display = 'block';
       };
@@ -204,12 +233,146 @@ export class DebugPanel {
     inner.appendChild(reloadNote);
     refreshCards();
 
+    // ── Level selector ──
+    const lvlHeading = document.createElement('div');
+    lvlHeading.textContent = 'JUMP TO LEVEL';
+    lvlHeading.style.cssText = `
+      font-size:10px; letter-spacing:3px; color:#664444;
+      margin:14px 0 8px; border-bottom:1px solid #2a1a2a; padding-bottom:5px;
+    `;
+    inner.appendChild(lvlHeading);
+
+    const lvlRow = document.createElement('div');
+    lvlRow.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px;';
+
+    for (let n = 1; n <= 5; n++) {
+      const box = document.createElement('div');
+      box.style.cssText = `
+        width:70px; height:64px; border-radius:8px;
+        border:2px solid #663333; background:#0d0a14;
+        display:flex; flex-direction:column;
+        align-items:center; justify-content:center; gap:2px;
+        cursor:pointer; font-family:Georgia,serif;
+        transition:border-color 0.12s, background 0.12s;
+      `;
+      box.innerHTML = `
+        <div style="font-size:22px;color:#ff8877;line-height:1">${n}</div>
+        <div style="font-size:9px;color:#664444;letter-spacing:1px">LEVEL</div>
+      `;
+      box.onmouseenter = () => { box.style.borderColor = '#ff6655'; box.style.background = '#1a0a0a'; };
+      box.onmouseleave = () => { box.style.borderColor = '#663333'; box.style.background = '#0d0a14'; };
+      box.onclick = () => {
+        // Use a temporary key — never writes to meta, so menu stays clean
+        this.hide();
+        if (this._onSelectLevel) this._onSelectLevel(n);
+      };
+      lvlRow.appendChild(box);
+    }
+
+    inner.appendChild(lvlRow);
+
+    // ── Game difficulty selector ──
+    const gameDiffHeading = document.createElement('div');
+    gameDiffHeading.textContent = 'GAME DIFFICULTY';
+    gameDiffHeading.style.cssText = `
+      font-size:10px; letter-spacing:3px; color:#664444;
+      margin:14px 0 8px; border-bottom:1px solid #2a1a2a; padding-bottom:5px;
+    `;
+    inner.appendChild(gameDiffHeading);
+
+    const gameDiffRow = document.createElement('div');
+    gameDiffRow.style.cssText = 'display:flex; gap:8px; margin-bottom:4px;';
+
+    const gameDiffOpts = [
+      { id: 1, label: 'Default',    sub: '1× enemies' },
+      { id: 2, label: 'Adventure',  sub: '1.6× HP / 1.3× dmg' },
+      { id: 3, label: 'Apocalypse', sub: '2.5× HP / 1.7× dmg' },
+    ];
+    const gameDiffBtns = [];
+    const currentGameDiff = parseInt(sessionStorage.getItem('debug_difficulty') || '1');
+    const refreshGameDiff = () => {
+      gameDiffBtns.forEach(({ btn, id }) => {
+        const active = parseInt(sessionStorage.getItem('debug_difficulty') || '1') === id;
+        btn.style.background  = active ? '#3a1a1a' : '#1a0a0a';
+        btn.style.borderColor = active ? '#ff6655' : '#442222';
+        btn.style.color       = active ? '#ff8877' : '#664444';
+      });
+    };
+
+    gameDiffOpts.forEach(({ id, label, sub }) => {
+      const btn = document.createElement('button');
+      btn.style.cssText = `
+        padding:6px 12px; border-radius:5px; cursor:pointer;
+        background:#1a0a0a; border:1px solid #442222; color:#664444;
+        font-family:Georgia,serif; font-size:11px; letter-spacing:1px;
+        transition:background 0.12s, border-color 0.12s;
+      `;
+      btn.innerHTML = `${label}<br><span style="font-size:9px;opacity:0.7">${sub}</span>`;
+      btn.onclick = () => {
+        sessionStorage.setItem('debug_difficulty', id);
+        refreshGameDiff();
+      };
+      gameDiffBtns.push({ btn, id });
+      gameDiffRow.appendChild(btn);
+    });
+    inner.appendChild(gameDiffRow);
+
+    const gameDiffNote = document.createElement('div');
+    gameDiffNote.style.cssText = 'font-size:10px; color:#554433; letter-spacing:1px; margin-bottom:4px;';
+    gameDiffNote.textContent = '⚠ Applies on next level jump.';
+    inner.appendChild(gameDiffNote);
+    refreshGameDiff();
+
+    // ── Loot difficulty selector ──
+    const diffHeading = document.createElement('div');
+    diffHeading.textContent = 'LOOT DIFFICULTY';
+    diffHeading.style.cssText = `
+      font-size:10px; letter-spacing:3px; color:#664444;
+      margin:14px 0 8px; border-bottom:1px solid #2a1a2a; padding-bottom:5px;
+    `;
+    inner.appendChild(diffHeading);
+
+    const diffRow = document.createElement('div');
+    diffRow.style.cssText = 'display:flex; gap:8px; margin-bottom:4px;';
+
+    const diffOpts = [
+      { id: 1, label: 'Default',    suffix: '' },
+      { id: 2, label: 'Adventure',  suffix: '+15 dmg / +3 def' },
+      { id: 3, label: 'Apocalypse', suffix: '+30 dmg / +6 def' },
+    ];
+    const diffBtns = [];
+    const refreshDiff = () => {
+      diffBtns.forEach(({ btn, id }) => {
+        const sel = this._debugDifficulty === id;
+        btn.style.background   = sel ? '#3a1a1a' : '#1a0a0a';
+        btn.style.borderColor  = sel ? '#ff6655' : '#442222';
+        btn.style.color        = sel ? '#ff8877' : '#664444';
+      });
+    };
+
+    diffOpts.forEach(({ id, label, suffix }) => {
+      const btn = document.createElement('button');
+      btn.style.cssText = `
+        padding:6px 12px; border-radius:5px; cursor:pointer;
+        background:#1a0a0a; border:1px solid #442222; color:#664444;
+        font-family:Georgia,serif; font-size:11px; letter-spacing:1px;
+        transition:background 0.12s, border-color 0.12s;
+      `;
+      btn.innerHTML = `${label}${suffix ? `<br><span style="font-size:9px;opacity:0.7">${suffix}</span>` : ''}`;
+      btn.onclick = () => { this._debugDifficulty = id; refreshDiff(); };
+      diffBtns.push({ btn, id });
+      diffRow.appendChild(btn);
+    });
+    inner.appendChild(diffRow);
+    refreshDiff();
+
     // Sections
     const sections = [
       { label: 'LEVEL 1 WEAPONS', items: WEAPONS },
       { label: 'LEVEL 1 ARMORS',  items: ARMORS  },
       { label: 'LEVEL 2 WEAPONS', items: WEAPONS_L2 },
       { label: 'LEVEL 2 ARMORS',  items: ARMORS_L2  },
+      { label: 'LEGENDARY',       items: [WIZARD_WAND] },
     ];
 
     sections.forEach(({ label, items }) => {
@@ -246,7 +409,7 @@ export class DebugPanel {
         card.onmouseenter = () => { card.style.borderColor = rc; card.style.background = '#1a1025'; };
         card.onmouseleave = () => { card.style.borderColor = rb; card.style.background = '#0d0a14'; };
         card.onclick = () => {
-          this._onEquip(item);
+          this._onEquip(scaleItem(item, this._debugDifficulty));
           // Flash the card green to confirm
           card.style.borderColor = '#44ff88';
           card.style.background  = '#0a1f10';
@@ -278,5 +441,5 @@ export class DebugPanel {
   show() { this._visible = true;  this._panel.style.display = 'flex'; }
   hide() { this._visible = false; this._panel.style.display = 'none'; }
 
-  get visible() { return this._visible; }
+  get visible() { return this._visible || this._prompt.style.display !== 'none'; }
 }

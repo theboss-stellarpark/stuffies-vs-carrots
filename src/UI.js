@@ -5,6 +5,7 @@ export class UI {
     this.gameOver      = false;
     this.victory       = false;
     this.levelComplete = false;
+    this.paused        = false;
     this._camera = null;
     this.onPotionUse = null;   // set by Game for mobile tap
   }
@@ -80,7 +81,7 @@ export class UI {
       color:#667788;font-size:12px;line-height:1.8;
       font-family:monospace;
     `;
-    hint.innerHTML = 'WASD / Arrows — Move<br>Click / Space — Attack<br>Shift — Dash &nbsp; Q — Potion<br>F — Map &nbsp; I / Tab — Inventory';
+    hint.innerHTML = 'WASD / Arrows — Move<br>Click / Space — Attack<br>Double-tap WASD — Dash &nbsp; Q — Potion<br>F — Map &nbsp; I / Tab — Inventory &nbsp; M — Pause';
     hud.appendChild(hint);
 
     // Overlay (game over / victory)
@@ -114,6 +115,51 @@ export class UI {
     this._overlay.appendChild(this._overlaySubtitle);
     this._overlay.appendChild(restartBtn);
     hud.appendChild(this._overlay);
+
+    // Pause menu overlay
+    this._pauseOverlay = document.createElement('div');
+    this._pauseOverlay.style.cssText = `
+      position:fixed;inset:0;display:none;
+      align-items:center;justify-content:center;flex-direction:column;gap:14px;
+      background:rgba(0,0,0,0.72);
+    `;
+
+    const pauseTitle = document.createElement('div');
+    pauseTitle.textContent = 'PAUSED';
+    pauseTitle.style.cssText = `
+      font-size:56px;font-weight:bold;color:#aaccdd;
+      letter-spacing:8px;text-shadow:0 0 24px #3388aa;
+      margin-bottom:24px;
+    `;
+
+    const btnStyle = `
+      padding:12px 48px;font-size:17px;
+      background:#0d1f2a;color:#aaccdd;
+      border:2px solid #2a6a8a;border-radius:6px;
+      cursor:pointer;font-family:Georgia,serif;letter-spacing:2px;
+      width:200px;
+    `;
+    const btnHover  = 'background:#1a3a50';
+    const btnLeave  = 'background:#0d1f2a';
+
+    const resumeBtn = document.createElement('button');
+    resumeBtn.textContent = 'RESUME';
+    resumeBtn.style.cssText = btnStyle;
+    resumeBtn.onmouseenter = () => resumeBtn.style.background = '#1a3a50';
+    resumeBtn.onmouseleave = () => resumeBtn.style.background = '#0d1f2a';
+    resumeBtn.onclick = () => this.hidePause();
+
+    const menuBtn = document.createElement('button');
+    menuBtn.textContent = 'MENU';
+    menuBtn.style.cssText = btnStyle;
+    menuBtn.onmouseenter = () => menuBtn.style.background = '#1a3a50';
+    menuBtn.onmouseleave = () => menuBtn.style.background = '#0d1f2a';
+    menuBtn.onclick = () => location.reload();
+
+    this._pauseOverlay.appendChild(pauseTitle);
+    this._pauseOverlay.appendChild(resumeBtn);
+    this._pauseOverlay.appendChild(menuBtn);
+    hud.appendChild(this._pauseOverlay);
 
     // Potion slot (bottom center, left of health bar)
     this._potionSlot = document.createElement('div');
@@ -189,7 +235,7 @@ export class UI {
     dashIcon.textContent = '💨';
     const dashKey = document.createElement('div');
     dashKey.style.cssText = 'font-size:10px; color:#5a9aaa; letter-spacing:1px; z-index:2; position:relative; margin-top:1px;';
-    dashKey.textContent = 'SHIFT';
+    dashKey.textContent = 'DBL-TAP';
 
     this._dashCdOverlay = document.createElement('div');
     this._dashCdOverlay.style.cssText = `
@@ -251,7 +297,7 @@ export class UI {
   }
 
   showPickup(item) {
-    const rarityColors = { common: '#aaaaaa', rare: '#4499ff', epic: '#cc44ff' };
+    const rarityColors = { common: '#aaaaaa', rare: '#4499ff', epic: '#cc44ff', legendary: '#ffdd00' };
     const color = rarityColors[item.rarity] || '#aaaaaa';
     const el = document.createElement('div');
     el.style.cssText = `
@@ -330,5 +376,20 @@ export class UI {
     this._overlayTitle.textContent = 'VICTORY!';
     this._overlaySubtitle.textContent = `Score: ${this.score}`;
     this._overlay.style.display = 'flex';
+  }
+
+  togglePause() {
+    if (this.gameOver || this.victory) return;
+    this.paused ? this.hidePause() : this.showPause();
+  }
+
+  showPause() {
+    this.paused = true;
+    this._pauseOverlay.style.display = 'flex';
+  }
+
+  hidePause() {
+    this.paused = false;
+    this._pauseOverlay.style.display = 'none';
   }
 }

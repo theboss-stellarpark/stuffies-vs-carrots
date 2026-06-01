@@ -37,6 +37,112 @@ export class Dungeon {
     this._addConduits();
   }
 
+  generateArena(width, height) {
+    this.width  = width;
+    this.height = height;
+    this.grid   = Array.from({ length: height }, () => new Array(width).fill(WALL));
+
+    // Carve the open floor — 2-tile border stays as enclosing wall
+    for (let gz = 2; gz < height - 2; gz++)
+      for (let gx = 2; gx < width - 2; gx++)
+        this.grid[gz][gx] = FLOOR;
+
+    // 2×2 pillar clusters on a regular grid, cleared around the center start zone
+    const SPACING = 8, START = 6;
+    const cx = Math.floor(width  / 2);
+    const cz = Math.floor(height / 2);
+    for (let gz = START; gz < height - START; gz += SPACING) {
+      for (let gx = START; gx < width - START; gx += SPACING) {
+        if (Math.abs(gx - cx) < SPACING / 2 && Math.abs(gz - cz) < SPACING / 2) continue;
+        for (let dy = 0; dy < 2; dy++)
+          for (let dx = 0; dx < 2; dx++)
+            this.grid[gz + dy][gx + dx] = WALL;
+      }
+    }
+
+    // Virtual rooms: [0] = player start (center), [1-8] = enemy spawn sectors
+    this.rooms = [
+      new Room(cx - 2,     cz - 2,      4, 4),
+      new Room(10,         10,          4, 4),
+      new Room(cx - 2,     10,          4, 4),
+      new Room(width - 14, 10,          4, 4),
+      new Room(10,         cz - 2,      4, 4),
+      new Room(width - 14, cz - 2,      4, 4),
+      new Room(10,         height - 14, 4, 4),
+      new Room(cx - 2,     height - 14, 4, 4),
+      new Room(width - 14, height - 14, 4, 4),
+    ];
+
+    this._buildGeometry();
+    this._addArenaLights();
+    this._addArenaDecor();
+  }
+
+  _addArenaLights() {
+    const T = this.T;
+    this.rooms.forEach((room, ri) => {
+      const wx = room.cx * T;
+      const wz = room.cy * T;
+      const isCenter = ri === 0;
+      const col      = isCenter ? 0xff3300 : (ri % 2 === 0 ? 0xff6622 : 0xdd2200);
+
+      const panelGeo = new THREE.BoxGeometry(T * 1.4, 0.08, T * 0.9);
+      const panelMat = new THREE.MeshBasicMaterial({ color: col });
+      const panel    = new THREE.Mesh(panelGeo, panelMat);
+      panel.position.set(wx, WALL_H - 0.06, wz);
+      this.scene.add(panel);
+      this._panels.push({ mesh: panel, mat: panelMat, phase: Math.random() * Math.PI * 2, type: 'alert' });
+
+      const haloMat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.3 });
+      const halo    = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), haloMat);
+      halo.position.set(wx, WALL_H - 0.65, wz);
+      this.scene.add(halo);
+      this._panels.push({ mesh: halo, mat: haloMat, phase: Math.random() * Math.PI * 2, type: 'halo' });
+
+      const light = new THREE.PointLight(col, isCenter ? 9 : 5.5, T * 22, 1.0);
+      light.position.set(wx, WALL_H - 1.0, wz);
+      this.scene.add(light);
+      this._lights.push({ light, phase: Math.random() * Math.PI * 2, type: 'alert' });
+      this.torchLights.push({ light, phase: Math.random() * Math.PI * 2 });
+    });
+  }
+
+  _addArenaDecor() {
+    const T  = this.T;
+    const wx = Math.floor(this.width  / 2) * T;
+    const wz = Math.floor(this.height / 2) * T;
+    const redMat  = new THREE.MeshBasicMaterial({ color: 0xff3300 });
+    const dimMat  = new THREE.MeshBasicMaterial({ color: 0xaa1100 });
+
+    // Inner and outer floor rings marking the arena center
+    const innerRing = new THREE.Mesh(new THREE.TorusGeometry(T * 3.5, 0.12, 6, 48), redMat);
+    innerRing.rotation.x = Math.PI / 2;
+    innerRing.position.set(wx, 0.02, wz);
+    this.scene.add(innerRing);
+
+    const outerRing = new THREE.Mesh(new THREE.TorusGeometry(T * 7, 0.08, 6, 64), dimMat);
+    outerRing.rotation.x = Math.PI / 2;
+    outerRing.position.set(wx, 0.02, wz);
+    this.scene.add(outerRing);
+
+    // Glowing base at each pillar cluster
+    const SPACING = 8, START = 6;
+    const cx = Math.floor(this.width  / 2);
+    const cz = Math.floor(this.height / 2);
+    const baseMat = new THREE.MeshBasicMaterial({ color: 0xff2200 });
+    for (let gz = START; gz < this.height - START; gz += SPACING) {
+      for (let gx = START; gx < this.width - START; gx += SPACING) {
+        if (Math.abs(gx - cx) < SPACING / 2 && Math.abs(gz - cz) < SPACING / 2) continue;
+        // Glow strip around the 2×2 pillar base
+        const px = (gx + 0.5) * T;
+        const pz = (gz + 0.5) * T;
+        const base = new THREE.Mesh(new THREE.BoxGeometry(T * 2.1, 0.06, T * 2.1), baseMat);
+        base.position.set(px, 0.02, pz);
+        this.scene.add(base);
+      }
+    }
+  }
+
   // ── Room generation (unchanged) ─────────────────────────────────────────
 
   _placeRooms() {
