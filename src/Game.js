@@ -163,6 +163,7 @@ export class Game {
         onDash:      () => this._playerDash(),
         onInventory: () => this.inventory.toggle(),
         onMap:       () => this.dungeonMap.toggle(),
+        onPause:     () => this.ui.togglePause(),
       });
     }
 
