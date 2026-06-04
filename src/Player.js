@@ -385,8 +385,10 @@ export class Player {
 
       return g;
     };
-    this.group.add(makeAntenna(-0.21));
-    this.group.add(makeAntenna(0.21));
+    this._leftAntenna  = makeAntenna(-0.21);
+    this._rightAntenna = makeAntenna(0.21);
+    this.group.add(this._leftAntenna);
+    this.group.add(this._rightAntenna);
 
     // ── Legs ──
     const legGeo = new THREE.BoxGeometry(0.32, 0.62, 0.32);
@@ -870,6 +872,18 @@ export class Player {
   // ─── Core ────────────────────────────────────────────────────────────────
 
   get position() { return this.group.position; }
+
+  // Returns world-space tip positions of both antennae (stuffy only)
+  getAntennaTips() {
+    if (!this._leftAntenna) return null;
+    this._leftAntenna.updateWorldMatrix(true, false);
+    this._rightAntenna.updateWorldMatrix(true, false);
+    const tipY = new THREE.Vector3(0, 0.63, 0);
+    return [
+      tipY.clone().applyMatrix4(this._leftAntenna.matrixWorld),
+      tipY.clone().applyMatrix4(this._rightAntenna.matrixWorld),
+    ];
+  }
 
   triggerAttack() { this.attackAnim = 1.0; }
 

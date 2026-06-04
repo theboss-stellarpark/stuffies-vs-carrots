@@ -12,6 +12,7 @@ import { CyCarrot } from './CyCarrot.js';
 import { CarrotSoldier } from './CarrotSoldier.js';
 import { WizardCarrot } from './WizardCarrot.js';
 import { DebugPanel } from './DebugPanel.js';
+import { getStartingAbilities } from './Abilities.js';
 
 const TILE = 3;
 
@@ -229,6 +230,12 @@ export class Game {
     this._potionCooldownMax = 20;
     this._potionCooldownLeft = 0;
     this._doubleTapTimes = {};
+
+    // Ability cooldown tracking: map of abilityId → last-used clock time
+    this._abilityCooldowns = {};
+    this._abilities = getStartingAbilities(this._character);
+    this._laserBeams = []; // active beam visuals
+
     const DOUBLE_TAP_MS = 250;
     const DASH_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'];
 
@@ -264,6 +271,10 @@ export class Game {
       if (e.code === 'KeyM') {
         e.preventDefault();
         this.ui.togglePause();
+      }
+      if (e.code === 'AltLeft' || e.code === 'AltRight') {
+        e.preventDefault();
+        this._useAbility('laser_blast');
       }
     });
     document.addEventListener('keyup', e => { this.keys[e.code] = false; });
@@ -347,6 +358,109 @@ export class Game {
     this._potionCooldownLeft = this._potionCooldownMax;
     this.ui.setPotionCooldown(this._potionCooldownLeft, this._potionCooldownMax);
     this._spawnHealParticles(this.player.position);
+  }
+
+  // ─── Abilities ───────────────────────────────────────────────────────────
+
+  _useAbility(id) {
+    if (this.ui.gameOver || this.ui.victory || this.ui.paused || this.player.frozen || this.player.dead) return;
+    if (this.inventory._visible) return;
+
+    const ability = this._abilities.find(a => a.id === id);
+    if (!ability) return;
+
+    const now = this.clock.getElapsedTime();
+    if (now - (this._abilityCooldowns[id] ?? -Infinity) < ability.cooldown) return;
+    this._abilityCooldowns[id] = now;
+
+    if (id === 'laser_blast') this._useLaserBlast(ability);
+  }
+
+  _useLaserBlast(ability) {
+    const tips = this.player.getAntennaTips();
+    const origins = tips ?? [this.player.position.clone().add(new THREE.Vector3(0, 1.2, 0))];
+    const dir = new THREE.Vector3(
+      Math.sin(this.player.facingAngle), 0,
+      Math.cos(this.player.facingAngle)
+    ).normalize();
+
+    // Hit detection: use player position (XZ) as the ray anchor so both beams share one hit pass
+    const hitOrigin = this.player.position.clone();
+    this.enemies.forEach(enemy => {
+      if (enemy.dead) return;
+      const toEnemy = enemy.group.position.clone().sub(hitOrigin);
+      toEnemy.y = 0;
+      if (toEnemy.length() > ability.range) return;
+
+      const along = toEnemy.dot(dir);
+      if (along < 0) return;
+      const perpSq = toEnemy.lengthSq() - along * along;
+      if (perpSq > 1.6 * 1.6) return;
+
+      const boost = this._character === 'slothy' ? 1.10 : this._character === 'minty' ? 1.05 : 1.0;
+      const dmg = Math.floor(ability.damage * boost);
+      enemy.takeDamage(dmg);
+      this.ui.showDamageAt(
+        enemy.group.position.clone().add(new THREE.Vector3(0, 2.2, 0)), dmg
+      );
+      if (enemy.dead) {
+        this.ui.addScore(100);
+        this._spawnParticles(enemy.group.position);
+        if (enemy instanceof WizardCarrot) {
+          this.lootDrops.push(new LootDrop(this.scene, enemy.group.position.clone(), scaleItem(WIZARD_WAND, this._difficulty)));
+          this._unlockBossDoor();
+        } else {
+          this._spawnLoot(enemy.group.position);
+        }
+      }
+    });
+
+    // Spawn one beam per antenna tip
+    const beamLen = ability.range;
+    const flashColors = [0x39ff14, 0xaaff44, 0xffffff];
+    origins.forEach(origin => {
+      const beamMat = new THREE.MeshBasicMaterial({
+        color: 0x39ff14, transparent: true, opacity: 0.95,
+      });
+      const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.07, 0.07, beamLen, 6),
+        beamMat
+      );
+      beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      beam.position.copy(origin).addScaledVector(dir, beamLen / 2);
+      this.scene.add(beam);
+      this._laserBeams.push({ mesh: beam, mat: beamMat, life: 0.22 });
+
+      // Muzzle flash at each tip
+      for (let i = 0; i < 4; i++) {
+        const m = new THREE.Mesh(
+          new THREE.BoxGeometry(0.09, 0.09, 0.09),
+          new THREE.MeshBasicMaterial({ color: flashColors[i % flashColors.length] })
+        );
+        m.position.copy(origin).addScaledVector(dir, 0.5 + Math.random() * 0.8);
+        m.position.x += (Math.random() - 0.5) * 0.3;
+        m.position.z += (Math.random() - 0.5) * 0.3;
+        this.scene.add(m);
+        this.particles.push({
+          mesh: m,
+          vel: new THREE.Vector3(
+            dir.x * (2 + Math.random() * 3) + (Math.random() - 0.5) * 1.5,
+            1 + Math.random() * 2,
+            dir.z * (2 + Math.random() * 3) + (Math.random() - 0.5) * 1.5
+          ),
+          life: 0.18 + Math.random() * 0.10,
+        });
+      }
+    });
+  }
+
+  _updateLaserBeams(delta) {
+    this._laserBeams = this._laserBeams.filter(b => {
+      b.life -= delta;
+      b.mat.opacity = Math.max(0, b.life / 0.22) * 0.95;
+      if (b.life <= 0) { this.scene.remove(b.mesh); return false; }
+      return true;
+    });
   }
 
   // ─── Loot ────────────────────────────────────────────────────────────────
@@ -541,6 +655,7 @@ export class Game {
       });
 
       this._updateParticles(delta);
+      this._updateLaserBeams(delta);
       this._updateLoot(elapsed);
 
       if (this.player.health <= 0) {
