@@ -10,8 +10,26 @@ export function getMeta() {
 }
 export function saveMeta(meta) { localStorage.setItem(META_KEY, JSON.stringify(meta)); }
 function defaultMeta() {
-  return { coins: 0, unlockedChars: ['stuffy'], selectedChar: 'stuffy', clearedLevels: [], unlockedDifficulties: [1] };
+  return {
+    coins: 0, unlockedChars: ['stuffy'], selectedChar: 'stuffy',
+    clearedLevels: [], unlockedDifficulties: [1],
+    level: 1, xp: 0, tokens: 0, unlockedAbilities: ['laser_blast'],
+    equippedAbility: 'laser_blast',
+  };
 }
+
+// XP required to advance FROM level n to n+1
+export function xpToNextLevel(level) {
+  return Math.floor(500 * Math.pow(level, 1.5));
+}
+
+// XP rewarded per enemy type
+export const ENEMY_XP = {
+  Enemy:         30,
+  CyCarrot:      50,
+  CarrotSoldier: 65,
+  WizardCarrot:  300,
+};
 
 export const WEAPONS = [
   {

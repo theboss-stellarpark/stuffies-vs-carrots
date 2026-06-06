@@ -1,4 +1,5 @@
 import { SAVE_KEY, SLOTHY_COST, MINTY_COST, getMeta, saveMeta } from './Items.js?v=3';
+import { AbilityTreeScreen } from './AbilityTreeScreen.js';
 
 export class HomeScreen {
   constructor(onSelectLevel) {
@@ -70,9 +71,11 @@ export class HomeScreen {
     levelWrap.style.cssText = 'display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:32px;';
     this._buildLevelSelector(levelWrap);
 
-    // Coin counter (top right)
+    // Coin + token counter (top right)
     const coins = document.createElement('div');
-    coins.textContent = `🪙 ${this._meta.coins || 0}`;
+    const lvl = this._meta.level ?? 1;
+    const tok = this._meta.tokens ?? 0;
+    coins.innerHTML = `🪙 ${this._meta.coins || 0}&nbsp;&nbsp;<span style="color:#39ff14;text-shadow:0 0 8px rgba(57,255,20,0.7);font-size:14px">LVL ${lvl} · ${tok} token${tok !== 1 ? 's' : ''}</span>`;
     coins.style.cssText = `
       position:absolute; top:18px; right:22px;
       color:#ffcc44; font-size:18px; letter-spacing:1px;
@@ -88,10 +91,31 @@ export class HomeScreen {
       color:#2a4a6a; font-family:monospace; font-size:12px; letter-spacing:1px;
     `;
 
+    // Abilities button (below character selector)
+    const abilitiesBtn = document.createElement('div');
+    abilitiesBtn.textContent = '⚡ FLUFFY\'S ABILITIES';
+    abilitiesBtn.style.cssText = `
+      font-size:11px; letter-spacing:3px; color:#39ff14;
+      cursor:pointer; margin-bottom:20px;
+      text-shadow:0 0 12px rgba(57,255,20,0.6);
+      opacity:0.8; transition:opacity 0.15s;
+      border:1px solid rgba(57,255,20,0.3);
+      padding:6px 16px; border-radius:20px;
+    `;
+    abilitiesBtn.onmouseenter = () => abilitiesBtn.style.opacity = '1';
+    abilitiesBtn.onmouseleave = () => abilitiesBtn.style.opacity = '0.8';
+    abilitiesBtn.onclick = () => {
+      new AbilityTreeScreen('stuffy', () => {
+        new HomeScreen(this._onSelectLevel);
+      });
+      this.remove();
+    };
+
     this._el.appendChild(coins);
     this._el.appendChild(title);
     this._el.appendChild(sub);
     this._el.appendChild(charWrap);
+    this._el.appendChild(abilitiesBtn);
     this._el.appendChild(diffLabel);
     this._el.appendChild(diffWrap);
     this._el.appendChild(levelLabel);
